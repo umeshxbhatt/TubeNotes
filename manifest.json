@@ -1,0 +1,10 @@
+
+{
+  "manifest_version": 3,
+  "name": "TubeNotes",
+  "version": "1.0",
+  "description": "My first YouTube notes extension!",
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

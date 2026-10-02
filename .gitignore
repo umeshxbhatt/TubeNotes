@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Environment / Secrets (for future API keys)
+.env
+*.local
+
+# Node (if used later)
+node_modules/
