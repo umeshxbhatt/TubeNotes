@@ -1,4 +1,3 @@
-
 {
   "manifest_version": 3,
   "name": "TubeNotes",
@@ -6,5 +5,21 @@
   "description": "My first YouTube notes extension!",
   "action": {
     "default_popup": "popup.html"
+  },
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
   }
 }
