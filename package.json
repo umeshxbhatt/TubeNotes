@@ -1,0 +1,26 @@
+{
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "youtube-transcript": "^1.3.1"
+  },
+  "name": "tubenotes",
+  "version": "1.0.0",
+  "description": "A Chrome extension for extracting YouTube video details and organizing video notes.",
+  "main": "popup.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/umeshxbhatt/TubeNotes.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/umeshxbhatt/TubeNotes/issues"
+  },
+  "homepage": "https://github.com/umeshxbhatt/TubeNotes#readme"
+}
