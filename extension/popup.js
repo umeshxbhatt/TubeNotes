@@ -21,12 +21,20 @@ document.addEventListener('DOMContentLoaded', function () {
       try {
         const transcriptText = await fetchTranscript(videoId);
         console.log("Transcript fetched successfully!");
-        statusDiv.textContent = "Transcript ready! Check console.";
+        statusDiv.textContent = "Transcript ready! Generating notes using AI... (this might take a few seconds)";
+        statusDiv.style.color = "orange";
+
+        // --- NEW STEP: Send to Gemini ---
+        const notes = await generateNotes(transcriptText);
+        console.log("AI Notes Generated:", notes);
+
+        statusDiv.textContent = "Notes generated successfully! Check console.";
         statusDiv.style.color = "green";
-        console.log(transcriptText); // We will send this to AI later!
+        // --------------------------------
+
       } catch (error) {
         console.error(error);
-        statusDiv.textContent = "Error: Could not fetch transcript.";
+        statusDiv.textContent = "Error: Something went wrong.";
         statusDiv.style.color = "red";
       }
 
@@ -62,16 +70,41 @@ function extractVideoId(urlText) {
 async function fetchTranscript(videoId) {
   // We send a request to our local server instead of YouTube
   const response = await fetch(`http://localhost:3000/transcript?videoId=${videoId}`);
-  
+
   if (!response.ok) {
     throw new Error("Backend server returned an error.");
   }
-  
+
+  const data = await response.json();
+
+  if (data.error) {
+    throw new Error(data.error);
+  }
+
+  return data.text;
+}
+
+// --- UPDATED FUNCTION: Ask our backend server to generate notes ---
+async function generateNotes(transcript) {
+  // We send a POST request to our local server
+  const response = await fetch('http://localhost:3000/generate-notes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    // We send the transcript in the body of the request
+    body: JSON.stringify({ transcript: transcript })
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to get notes from backend server.");
+  }
+
   const data = await response.json();
   
   if (data.error) {
     throw new Error(data.error);
   }
   
-  return data.text;
+  return data.notes;
 }
