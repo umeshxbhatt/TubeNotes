@@ -6,6 +6,22 @@ document.addEventListener('DOMContentLoaded', function () {
   const notesOutput = document.getElementById('notesOutput'); // <-- NEW: Grab our new text box
   const downloadBtn = document.getElementById('downloadBtn'); // Grab the download button
 
+  // --- NEW: Auto-detect YouTube URL ---
+  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+    const currentTab = tabs[0];
+    // Check if we are currently on a YouTube video page
+    if (currentTab && currentTab.url && currentTab.url.includes("youtube.com/watch")) {
+      urlInput.value = currentTab.url; // Automatically fill the input box!
+    }
+  });
+
+  // --- FIXED: Press 'Enter' anywhere to generate ---
+  document.addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+      generateBtn.click(); // Simulates clicking the generate button
+    }
+  });
+
   // 2. Listen for a 'click' event on our button
   generateBtn.addEventListener('click', async function () {
 
