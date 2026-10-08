@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const generateBtn = document.getElementById('generateBtn');
   const urlInput = document.getElementById('youtubeUrl');
   const statusDiv = document.getElementById('status');
+  const notesOutput = document.getElementById('notesOutput'); // <-- NEW: Grab our new text box
+  const downloadBtn = document.getElementById('downloadBtn'); // Grab the download button
 
   // 2. Listen for a 'click' event on our button
   generateBtn.addEventListener('click', async function () {
@@ -28,7 +30,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const notes = await generateNotes(transcriptText);
         console.log("AI Notes Generated:", notes);
 
-        statusDiv.textContent = "Notes generated successfully! Check console.";
+        // --- NEW STEP: Display in the UI ---
+        notesOutput.value = notes;       // Put the text inside the box
+        notesOutput.style.display = "block"; // Make the box visible
+        downloadBtn.style.display = "block"; // Make the download button visible
+        
+        statusDiv.textContent = "Notes generated successfully!";
         statusDiv.style.color = "green";
         // --------------------------------
 
@@ -43,6 +50,25 @@ document.addEventListener('DOMContentLoaded', function () {
       statusDiv.textContent = "Error: Please enter a valid YouTube URL.";
       statusDiv.style.color = "red";
     }
+  });
+
+  // --- NEW STEP: Download Logic ---
+  downloadBtn.addEventListener('click', function () {
+    // 1. Get the text from the text area
+    const textToSave = notesOutput.value;
+
+    // 2. Create a "Blob" (a file-like object) containing the text
+    const blob = new Blob([textToSave], { type: 'text/markdown' });
+
+    // 3. Create a temporary URL for that Blob
+    const url = URL.createObjectURL(blob);
+
+    // 4. Use Chrome's download API to save it to the user's computer
+    chrome.downloads.download({
+      url: url,
+      filename: `TubeNotes-${Date.now()}.md`, // Give it a unique filename
+      saveAs: true // Ask the user where to save it
+    });
   });
 });
 

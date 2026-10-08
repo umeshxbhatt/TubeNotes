@@ -13,6 +13,13 @@
   <button id="generateBtn">Generate Notes</button>
 
   <div id="status"></div>
+  
+  <!-- We will show this text area once the AI returns the notes! -->
+  <textarea id="notesOutput" rows="10" placeholder="Your AI notes will appear here..." style="display: none; width: 100%; margin-top: 10px;"></textarea>
+
+  <!-- Download button, hidden until notes are ready -->
+  <button id="downloadBtn" style="display: none; margin-top: 10px;">Download Notes</button>
+
   <script src="popup.js"></script>
 </body>
 
