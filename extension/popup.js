@@ -51,9 +51,11 @@ document.addEventListener('DOMContentLoaded', function () {
   const copyCheckIcon = copyBtn.querySelector('.check-icon');
   const downloadBtn = document.getElementById('downloadBtn');
 
-  // Style Chips & Language
+  // Style Chips & Custom Prompt Elements
   const styleChips = document.querySelectorAll('.chip');
-  const notesLangSelect = document.getElementById('notesLangSelect');
+  const customPromptInput = document.getElementById('customPromptInput');
+  const clearPromptBtn = document.getElementById('clearPromptBtn');
+  const promptTags = document.getElementById('promptTags');
 
   // Fast Transcript Button
   const fetchTranscriptOnlyBtn = document.getElementById('fetchTranscriptOnlyBtn');
@@ -62,7 +64,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // State Management - Separate slots for Quick Summary & Notes
   let selectedStyle = 'summary'; // 'summary' | 'notes'
-  let selectedNotesLang = 'en';  // 'en' | 'original' | 'hi' | 'hinglish' | 'es' | etc.
   let currentSummaryNotes = '';  // Slot A: Quick Summary
   let currentDetailedNotes = ''; // Slot B: Detailed Notes
   let currentVideoId = '';
@@ -94,6 +95,48 @@ document.addEventListener('DOMContentLoaded', function () {
     toggleClearButton();
     urlInput.focus();
   });
+
+  // Custom prompt input handlers & quick tags
+  if (customPromptInput) {
+    customPromptInput.addEventListener('input', toggleClearPromptBtn);
+  }
+
+  if (clearPromptBtn) {
+    clearPromptBtn.addEventListener('click', function () {
+      if (customPromptInput) {
+        customPromptInput.value = '';
+        toggleClearPromptBtn();
+        customPromptInput.focus();
+      }
+    });
+  }
+
+  if (promptTags) {
+    promptTags.addEventListener('click', function (e) {
+      const tag = e.target.closest('.prompt-tag');
+      if (!tag) return;
+      const textToInsert = tag.dataset.insert;
+      if (!textToInsert || !customPromptInput) return;
+
+      const currentVal = customPromptInput.value.trim();
+      if (!currentVal) {
+        customPromptInput.value = textToInsert;
+      } else if (!currentVal.toLowerCase().includes(textToInsert.toLowerCase())) {
+        customPromptInput.value = `${currentVal}, ${textToInsert}`;
+      }
+      toggleClearPromptBtn();
+      customPromptInput.focus();
+    });
+  }
+
+  function toggleClearPromptBtn() {
+    if (!clearPromptBtn || !customPromptInput) return;
+    if (customPromptInput.value.trim().length > 0) {
+      clearPromptBtn.classList.remove('hidden');
+    } else {
+      clearPromptBtn.classList.add('hidden');
+    }
+  }
 
   function toggleClearButton() {
     if (urlInput.value.trim().length > 0) {
@@ -138,13 +181,6 @@ document.addEventListener('DOMContentLoaded', function () {
   function updateGenerateButtonText() {
     const isSummary = selectedStyle === 'summary';
     btnText.textContent = isSummary ? "Generate Summary" : "Generate Notes";
-  }
-
-  // Language selector change listener
-  if (notesLangSelect) {
-    notesLangSelect.addEventListener('change', function () {
-      selectedNotesLang = notesLangSelect.value;
-    });
   }
 
   // Display notes for whichever style chip is currently active
@@ -297,9 +333,10 @@ document.addEventListener('DOMContentLoaded', function () {
         renderTranscript(transcriptData);
       }
 
-      // Step B: Send transcript to AI note generator for the selected style & language
+      // Step B: Send transcript to AI note generator for the selected style & custom prompt
+      const customPrompt = customPromptInput ? customPromptInput.value.trim() : '';
       showStatus(`Synthesizing ${styleLabel} with Gemini AI...`, "info");
-      const generatedNotes = await generateAINotes(currentTranscript, selectedStyle, selectedNotesLang);
+      const generatedNotes = await generateAINotes(currentTranscript, selectedStyle, customPrompt);
 
       // Step C: Save into the appropriate style slot
       if (isSummary) {
@@ -318,7 +355,7 @@ document.addEventListener('DOMContentLoaded', function () {
         summaryNotes: currentSummaryNotes,
         detailedNotes: currentDetailedNotes,
         style: selectedStyle,
-        notesLanguage: selectedNotesLang,
+        customPrompt: customPrompt,
         transcript: currentTranscript,
         formattedTranscript: currentFormattedTranscript,
         transcriptBlocks: currentTranscriptBlocks,
@@ -401,8 +438,10 @@ document.addEventListener('DOMContentLoaded', function () {
       currentFormattedTranscript = '';
       currentTranscriptBlocks = [];
       currentTranscriptLang = '';
-      selectedNotesLang = 'en';
-      if (notesLangSelect) notesLangSelect.value = 'en';
+      if (customPromptInput) {
+        customPromptInput.value = '';
+        toggleClearPromptBtn();
+      }
       chatHistory = [];
       notesContent.innerHTML = '';
       transcriptContent.innerHTML = '';
@@ -691,8 +730,6 @@ document.addEventListener('DOMContentLoaded', function () {
       currentFormattedTranscript = saved.formattedTranscript || saved.transcript || '';
       currentTranscriptBlocks = saved.transcriptBlocks || [];
       currentTranscriptLang = saved.transcriptLang || saved.languageLabel || '';
-      selectedNotesLang = saved.notesLanguage || 'en';
-      if (notesLangSelect) notesLangSelect.value = selectedNotesLang;
       chatHistory = saved.chatHistory || [];
 
       // Restore separate slots (with backward compatibility)
@@ -703,6 +740,11 @@ document.addEventListener('DOMContentLoaded', function () {
         setChipActive(saved.style);
       } else {
         setChipActive('summary');
+      }
+
+      if (customPromptInput) {
+        customPromptInput.value = saved.customPrompt || '';
+        toggleClearPromptBtn();
       }
 
       displayCurrentStyleNotes();
@@ -796,11 +838,11 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Call Gemini backend for note generation
-  async function generateAINotes(transcript, style, language = 'en') {
+  async function generateAINotes(transcript, style, customPrompt = '') {
     const response = await fetch(`http://localhost:3000/generate-notes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transcript, style, language })
+      body: JSON.stringify({ transcript, style, customPrompt })
     });
 
     if (!response.ok) {

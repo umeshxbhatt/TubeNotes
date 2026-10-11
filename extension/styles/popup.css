@@ -231,59 +231,12 @@ body {
   gap: 6px;
 }
 
-.section-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .section-label {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.6px;
   color: var(--text-muted);
   text-transform: uppercase;
-}
-
-.lang-selector-wrapper {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  padding: 1px 6px;
-  color: var(--text-muted);
-  transition: var(--transition);
-}
-
-.lang-selector-wrapper:hover,
-.lang-selector-wrapper:focus-within {
-  border-color: rgba(255, 0, 51, 0.35);
-  background: rgba(255, 0, 51, 0.05);
-  color: var(--crimson-primary);
-}
-
-.lang-globe-icon {
-  flex-shrink: 0;
-  opacity: 0.75;
-}
-
-.lang-select {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  outline: none;
-  padding: 1px 0;
-}
-
-.lang-select option {
-  background: #141417;
-  color: #e5e7eb;
 }
 
 .style-chips {
@@ -333,6 +286,94 @@ body {
 .chip.active .chip-svg {
   color: var(--crimson-primary);
   filter: drop-shadow(0 0 4px rgba(255, 0, 51, 0.4));
+}
+
+.style-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.clear-prompt-link {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+  transition: var(--transition);
+}
+
+.clear-prompt-link:hover {
+  color: var(--crimson-primary);
+  text-decoration: underline;
+}
+
+.custom-prompt-container {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.custom-prompt-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  transition: var(--transition);
+}
+
+.custom-prompt-input-wrapper:focus-within {
+  border-color: var(--crimson-primary);
+  box-shadow: 0 0 8px rgba(255, 0, 51, 0.2);
+}
+
+.prompt-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.custom-prompt-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.custom-prompt-input::placeholder {
+  color: #6b7280;
+  font-size: 10.5px;
+}
+
+.prompt-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.prompt-tag {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 2px 7px;
+  font-size: 9.5px;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.prompt-tag:hover {
+  background: rgba(255, 0, 51, 0.12);
+  border-color: rgba(255, 0, 51, 0.35);
+  color: #ffffff;
 }
 
 /* ---------------- Action Buttons ---------------- */

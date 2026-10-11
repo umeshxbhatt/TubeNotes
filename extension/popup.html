@@ -48,27 +48,11 @@
           </button>
         </div>
 
-        <!-- Note Style & Language Selection -->
+        <!-- Note Style Selection (2 distinct styles + Custom Prompt) -->
         <div class="style-section">
-          <div class="section-header-row">
-            <div class="section-label">NOTE STYLE</div>
-            <div class="lang-selector-wrapper" title="Language for generated notes">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" class="lang-globe-icon">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="2" y1="12" x2="22" y2="12"/>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-              </svg>
-              <select id="notesLangSelect" class="lang-select">
-                <option value="en" selected>English</option>
-                <option value="original">Original (Video)</option>
-                <option value="hi">Hindi</option>
-                <option value="hinglish">Hinglish</option>
-                <option value="es">Spanish</option>
-                <option value="fr">French</option>
-                <option value="de">German</option>
-                <option value="ja">Japanese</option>
-              </select>
-            </div>
+          <div class="style-header-row">
+            <span class="section-label">NOTE STYLE & CUSTOM PROMPT</span>
+            <button type="button" id="clearPromptBtn" class="clear-prompt-link hidden" title="Clear custom instruction">Clear</button>
           </div>
           <div class="style-chips two-cols">
             <button class="chip active" data-style="summary">
@@ -84,8 +68,26 @@
                 <line x1="16" y1="13" x2="8" y2="13"/>
                 <line x1="16" y1="17" x2="8" y2="17"/>
               </svg>
-              <span>Notes</span>
+              <span>Detailed Notes</span>
             </button>
+          </div>
+
+          <!-- Custom Prompt Bar -->
+          <div class="custom-prompt-container">
+            <div class="custom-prompt-input-wrapper">
+              <svg class="prompt-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+              <input type="text" id="customPromptInput" class="custom-prompt-input" placeholder="Custom focus (optional): e.g. in Hinglish, key takeaways..." spellcheck="false" autocomplete="off" />
+            </div>
+            <!-- Quick Pre-Default Suggestion Tags -->
+            <div class="prompt-tags" id="promptTags">
+              <button type="button" class="prompt-tag" data-insert="In Hinglish">⚡ In Hinglish</button>
+              <button type="button" class="prompt-tag" data-insert="Key takeaways & action items">🎯 Action Items</button>
+              <button type="button" class="prompt-tag" data-insert="Focus on code & practical examples">💻 Code & Examples</button>
+              <button type="button" class="prompt-tag" data-insert="Exam revision cheat sheet">📚 Exam Prep</button>
+            </div>
           </div>
         </div>
 

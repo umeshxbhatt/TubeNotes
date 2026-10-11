@@ -337,7 +337,7 @@ app.get('/transcript', async (req, res) => {
 
 // Create an endpoint to handle AI Note Generation
 app.post('/generate-notes', async (req, res) => {
-  const transcript = req.body.transcript;
+  const { transcript, style = 'summary', customPrompt = '' } = req.body;
 
   if (!transcript) {
     return res.status(400).json({ error: 'Please provide a transcript' });
@@ -350,48 +350,48 @@ app.post('/generate-notes', async (req, res) => {
     return res.status(500).json({ error: 'API Key not found in .env file on the server.' });
   }
 
-  // 2 note styles: "summary" (default) vs "notes"
-  const style = req.body.style || 'summary';
-  const language = req.body.language || 'en';
-
   let styleInstruction = "Create a crisp Quick Summary: 2 concise paragraphs covering the core topic, followed by 3 key bullet points.";
   if (style === 'notes' || style === 'deep-dive') {
     styleInstruction = "Create comprehensive, exhaustive study notes with clear bold headings, in-depth concept breakdown, important quotes, and actionable takeaways.";
   }
 
-  let languageInstruction = "Regardless of the original language of the video or transcript, write ALL notes strictly in fluent, professional English.";
-  if (language === 'original') {
-    languageInstruction = "Write ALL notes in the PRIMARY ORIGINAL language used in the video transcript (e.g. if the video is in Hindi, write in Hindi; if Spanish, write in Spanish; if English, write in English). Preserve original terms.";
-  } else if (language === 'hi') {
-    languageInstruction = "Write ALL notes in natural, clear Hindi (Devanagari script), keeping technical terms understandable.";
-  } else if (language === 'hinglish') {
-    languageInstruction = "Write ALL notes in casual, easy-to-read Hinglish (Hindi written in Roman/English alphabet), commonly used by Indian students.";
-  } else if (language === 'es') {
+  // Language & Custom Focus handling
+  const cleanPrompt = (customPrompt || '').trim();
+  const isHinglish = /hinglish|hindi/i.test(cleanPrompt);
+
+  let languageInstruction = "Write ALL notes strictly in fluent, clear English.";
+  if (isHinglish) {
+    languageInstruction = "Write ALL notes strictly in natural, conversational Hinglish (Hindi written using the English/Roman alphabet, e.g. 'Is video ka main topic ye hai ki...', keeping all technical terms in standard English). DO NOT use Devanagari Hindi script.";
+  } else if (/spanish|español/i.test(cleanPrompt)) {
     languageInstruction = "Write ALL notes strictly in fluent, professional Spanish.";
-  } else if (language === 'fr') {
+  } else if (/french|français/i.test(cleanPrompt)) {
     languageInstruction = "Write ALL notes strictly in fluent, professional French.";
-  } else if (language === 'de') {
-    languageInstruction = "Write ALL notes strictly in fluent, professional German.";
-  } else if (language === 'ja') {
-    languageInstruction = "Write ALL notes strictly in natural, professional Japanese.";
-  } else if (language !== 'en') {
-    languageInstruction = `Write ALL notes strictly in fluent, professional ${language}.`;
+  }
+
+  let customFocusBlock = "";
+  if (cleanPrompt) {
+    customFocusBlock = `
+      SPECIAL USER INSTRUCTIONS / CUSTOM FOCUS:
+      The user explicitly requested: "${cleanPrompt}".
+      You MUST strictly prioritize and incorporate these user instructions into the final output.
+    `;
   }
 
   try {
-    console.log(`Generating AI notes with style: ${style}, language: ${language}...`);
+    console.log(`Generating AI notes (style: ${style}, customPrompt: "${cleanPrompt}")...`);
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     
     const promptText = `
       You are an expert note-taker. I will give you a video transcript.
       
-      LANGUAGE REQUIREMENT:
+      LANGUAGE INSTRUCTION:
       ${languageInstruction}
 
-      STYLE & FORMATTING:
+      BASE STYLE & FORMATTING:
       ${styleInstruction}
       Use clean Markdown formatting (Headings, bullet points, bold text).
-      
+      ${customFocusBlock}
+
       Here is the transcript:
       ${transcript}
     `;
@@ -449,9 +449,9 @@ app.post('/chat', async (req, res) => {
 Your job is to answer the user's questions about the video accurately, clearly, and concisely.
 
 CRITICAL RULES:
-1. Respond naturally in the SAME language that the user writes in or requests (e.g., if asked in Hindi, Hinglish, Spanish, French, Japanese, etc., reply fluently in that language; if asked in English, reply in English).
+1. Respond naturally in the SAME language that the user writes in. If the user writes or asks in Hindi or Hinglish, ALWAYS respond in natural, easy-to-read Hinglish (Roman/English script, e.g. "Is video mein main point ye hai ki..."), NEVER in Devanagari Hindi script. If asked in English, reply in English.
 2. Anchor your answers directly to the video transcript provided below.
-3. If the user asks something not mentioned in the video, politely state that the video doesn't cover it, but offer a brief general explanation in their language.
+3. If the user asks something not mentioned in the video, politely state that the video doesn't cover it, but offer a brief general explanation.
 4. Format your responses with clean Markdown (bullet points, bold text, code blocks where appropriate).
 
 VIDEO TRANSCRIPT:
