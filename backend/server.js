@@ -14,23 +14,321 @@ app.use(express.json());
 // Enable CORS so our Chrome Extension can communicate with this server
 app.use(cors());
 
+// Helpers to decode entities and parse transcript XML
+function decodeEntities(text) {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)));
+}
+
+function formatTimestamp(seconds) {
+  const totalSec = Math.max(0, Math.floor(seconds || 0));
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  if (hrs > 0) {
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+function parseTranscriptXml(xml) {
+  const segments = [];
+  // Try srv3 format (<p t="ms">)
+  const pRegex = /<p\s+t="(\d+)"\s+d="(\d+)"[^>]*>([\s\S]*?)<\/p>/g;
+  let match;
+  while ((match = pRegex.exec(xml)) !== null) {
+    const startMs = parseInt(match[1], 10);
+    let text = match[3].replace(/<[^>]+>/g, '');
+    text = decodeEntities(text).trim();
+    if (text) {
+      segments.push({
+        offset: startMs / 1000,
+        text
+      });
+    }
+  }
+  if (segments.length > 0) return segments;
+
+  // Fall back to classic format (<text start="sec">)
+  const textRegex = /<text\s+start="([\d.]+)"[^>]*>([^<]*)<\/text>/g;
+  while ((match = textRegex.exec(xml)) !== null) {
+    const offsetSec = parseFloat(match[1]);
+    const text = decodeEntities(match[2]).trim();
+    if (text) {
+      segments.push({
+        offset: offsetSec,
+        text
+      });
+    }
+  }
+  return segments;
+}
+
+// Groups micro caption segments into readable timestamped paragraphs (~25-30s blocks)
+function structureSegmentsIntoParagraphs(segments) {
+  if (!segments || segments.length === 0) {
+    return { plainText: '', formattedText: '', blocks: [] };
+  }
+
+  const blocks = [];
+  let currentBlock = {
+    start: segments[0].offset || 0,
+    timestamp: formatTimestamp(segments[0].offset || 0),
+    texts: []
+  };
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    currentBlock.texts.push(seg.text);
+
+    const elapsed = (seg.offset || 0) - currentBlock.start;
+    const wordCount = currentBlock.texts.join(' ').split(/\s+/).length;
+
+    // Break into next block after ~25 seconds elapsed or ~40 words
+    if ((elapsed >= 25 || wordCount >= 40) && i < segments.length - 1) {
+      blocks.push({
+        start: currentBlock.start,
+        timestamp: currentBlock.timestamp,
+        text: currentBlock.texts.join(' ')
+      });
+      currentBlock = {
+        start: segments[i + 1].offset || 0,
+        timestamp: formatTimestamp(segments[i + 1].offset || 0),
+        texts: []
+      };
+    }
+  }
+
+  if (currentBlock.texts.length > 0) {
+    blocks.push({
+      start: currentBlock.start,
+      timestamp: currentBlock.timestamp,
+      text: currentBlock.texts.join(' ')
+    });
+  }
+
+  const plainText = segments.map(s => s.text).join(' ');
+  const formattedText = blocks.map(b => `[${b.timestamp}] ${b.text}`).join('\n\n');
+
+  return { plainText, formattedText, blocks };
+}
+
+// Smart Caption Track Selector: Prioritizes the true ORIGINAL video language
+// Strictly filters out auto-dubbed, localized dub, or auto-translated tracks
+function selectOriginalCaptionTrack(captionsRenderer, requestedLang, playerData) {
+  const captionTracks = captionsRenderer?.captionTracks;
+  if (!Array.isArray(captionTracks) || captionTracks.length === 0) {
+    return null;
+  }
+
+  console.log(`📋 Found ${captionTracks.length} caption track(s):`);
+  captionTracks.forEach((t, i) => {
+    const label = t.name?.simpleText || t.name?.runs?.[0]?.text || t.languageCode;
+    console.log(`   [${i}] lang: ${t.languageCode}, label: "${label}", vssId: ${t.vssId}, type: ${t.audioTrackType || 'none'}`);
+  });
+
+  // If user explicitly requested a language ISO code (e.g. 'en', 'hi', 'es')
+  if (requestedLang) {
+    const directMatch = captionTracks.find(t => t.languageCode?.toLowerCase() === requestedLang.toLowerCase() && !t.baseUrl.includes('&tlang='));
+    if (directMatch) return directMatch;
+    const fallbackMatch = captionTracks.find(t => t.languageCode?.toLowerCase() === requestedLang.toLowerCase());
+    if (fallbackMatch) return fallbackMatch;
+  }
+
+  const audioTracks = captionsRenderer?.audioTracks;
+  const defaultAudioTrackIndex = captionsRenderer?.defaultAudioTrackIndex;
+
+  const getTrackName = (t) => {
+    return (t?.name?.simpleText || t?.name?.runs?.[0]?.text || '').toLowerCase();
+  };
+
+  const isDubbed = (t) => {
+    const name = getTrackName(t);
+    const isDubType = t?.audioTrackType === 'AUDIO_TRACK_TYPE_DUBBED';
+    const hasDubWord = name.includes('auto-dub') || name.includes('dubbed') || name.includes('dub') || name.includes('डब');
+    return isDubType || hasDubWord;
+  };
+
+  const isExplicitlyOriginal = (t) => {
+    const name = getTrackName(t);
+    return name.includes('(original)') || name.includes('original') || t?.audioTrackType === 'AUDIO_TRACK_TYPE_PRIMARY';
+  };
+
+  // Priority 1: Caption track explicitly designated as "Original" or "PRIMARY" (and not auto-translated)
+  const explicitlyOriginal = captionTracks.find(t => isExplicitlyOriginal(t) && !t.baseUrl.includes('&tlang='));
+  if (explicitlyOriginal) {
+    console.log(`🎯 [P1] Selected explicitly original track: "${getTrackName(explicitlyOriginal)}" (${explicitlyOriginal.languageCode})`);
+    return explicitlyOriginal;
+  }
+
+  // Priority 2: Use defaultAudioTrackIndex mapping from audioTracks
+  if (Array.isArray(audioTracks) && typeof defaultAudioTrackIndex === 'number' && audioTracks[defaultAudioTrackIndex]) {
+    const defaultAudio = audioTracks[defaultAudioTrackIndex];
+    console.log(`🎧 Default audio track [${defaultAudioTrackIndex}]:`, defaultAudio.audioTrackId || 'unnamed');
+    const candidateIndices = defaultAudio.captionTrackIndices;
+    if (Array.isArray(candidateIndices) && candidateIndices.length > 0) {
+      const mappedTracks = candidateIndices.map(idx => captionTracks[idx]).filter(Boolean);
+      const originalMapped = mappedTracks.find(t => !isDubbed(t) && !t.baseUrl.includes('&tlang='));
+      if (originalMapped) {
+        console.log(`🎯 [P2] Selected track via defaultAudioTrackIndex: "${getTrackName(originalMapped)}" (${originalMapped.languageCode})`);
+        return originalMapped;
+      }
+    }
+  }
+
+  // Priority 3: Match video defaultLanguage from metadata (e.g. videoDetails or microformat)
+  const videoDefaultLang = (
+    playerData?.videoDetails?.defaultAudioLanguage ||
+    playerData?.videoDetails?.defaultLanguage ||
+    playerData?.microformat?.playerMicroformatRenderer?.defaultLanguage
+  )?.toLowerCase();
+
+  if (videoDefaultLang) {
+    console.log(`🌐 Video metadata default language: ${videoDefaultLang}`);
+    const defaultLangTrack = captionTracks.find(t => 
+      t.languageCode?.toLowerCase() === videoDefaultLang && 
+      !isDubbed(t) && 
+      !t.baseUrl.includes('&tlang=')
+    );
+    if (defaultLangTrack) {
+      console.log(`🎯 [P3] Selected track matching video defaultLanguage: "${getTrackName(defaultLangTrack)}" (${defaultLangTrack.languageCode})`);
+      return defaultLangTrack;
+    }
+  }
+
+  // Priority 4: Creator-uploaded manual caption track (vssId starts with '.' instead of 'a.') that is not dubbed
+  const manualTrack = captionTracks.find(t => 
+    t.vssId && !t.vssId.startsWith('a.') && 
+    !isDubbed(t) && 
+    !t.baseUrl.includes('&tlang=')
+  );
+  if (manualTrack) {
+    console.log(`🎯 [P4] Selected creator manual track: "${getTrackName(manualTrack)}" (${manualTrack.languageCode})`);
+    return manualTrack;
+  }
+
+  // Priority 5: Any native track that is NOT dubbed and NOT auto-translated
+  const nonDubbedNativeTracks = captionTracks.filter(t => !isDubbed(t) && !t.baseUrl.includes('&tlang='));
+  if (nonDubbedNativeTracks.length > 0) {
+    console.log(`🎯 [P5] Selected non-dubbed native track: "${getTrackName(nonDubbedNativeTracks[0])}" (${nonDubbedNativeTracks[0].languageCode})`);
+    return nonDubbedNativeTracks[0];
+  }
+
+  // Priority 6: Any non-auto-translated track
+  const nonTlang = captionTracks.find(t => !t.baseUrl.includes('&tlang='));
+  if (nonTlang) {
+    console.log(`🎯 [P6] Selected non-auto-translated track: "${getTrackName(nonTlang)}" (${nonTlang.languageCode})`);
+    return nonTlang;
+  }
+
+  console.log(`🎯 [P7] Fallback to first available track: "${getTrackName(captionTracks[0])}" (${captionTracks[0].languageCode})`);
+  return captionTracks[0];
+}
+
 // Create an endpoint at http://localhost:3000/transcript
+// Prioritizes the video's original/native language captions (skips auto-dubs & auto-translations)
 app.get('/transcript', async (req, res) => {
-  const videoId = req.query.videoId;
+  const { videoId, lang } = req.query;
 
   if (!videoId) {
     return res.status(400).json({ error: 'Please provide a videoId' });
   }
 
   try {
-    console.log(`Fetching transcript for video: ${videoId}`);
-    // Fetch the transcript using the npm package (which bypasses browser limits)
-    const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
-    
-    // Combine all the text blocks into one massive string
-    const fullText = transcriptArray.map(item => item.text).join(' ');
+    console.log(`\n========================================`);
+    console.log(`Fetching transcript for video: ${videoId} (requested lang: ${lang || 'original'})`);
 
-    res.json({ text: fullText });
+    const INNERTUBE_API_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
+    const INNERTUBE_CLIENT_VERSION = '20.10.38';
+    const INNERTUBE_CONTEXT = {
+      client: {
+        clientName: 'ANDROID',
+        clientVersion: INNERTUBE_CLIENT_VERSION,
+        hl: 'en',
+      },
+    };
+    const INNERTUBE_USER_AGENT = `com.google.android.youtube/${INNERTUBE_CLIENT_VERSION} (Linux; U; Android 14)`;
+
+    let rawSegments = [];
+    let detectedLang = 'en';
+    let trackLabel = '';
+
+    try {
+      const playerResp = await fetch(INNERTUBE_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': INNERTUBE_USER_AGENT,
+        },
+        body: JSON.stringify({
+          context: INNERTUBE_CONTEXT,
+          videoId: videoId,
+        }),
+      });
+
+      if (playerResp.ok) {
+        const playerData = await playerResp.json();
+        const captionsRenderer = playerData?.captions?.playerCaptionsTracklistRenderer;
+        const captionTracks = captionsRenderer?.captionTracks;
+
+        if (Array.isArray(captionTracks) && captionTracks.length > 0) {
+          const chosenTrack = selectOriginalCaptionTrack(captionsRenderer, lang, playerData);
+
+          if (chosenTrack) {
+            detectedLang = chosenTrack.languageCode || 'unknown';
+            trackLabel = chosenTrack.name?.simpleText || chosenTrack.name?.runs?.[0]?.text || detectedLang;
+            console.log(`✅ Using original caption track: "${trackLabel}" (${detectedLang})`);
+
+            const xmlResp = await fetch(chosenTrack.baseUrl, {
+              headers: { 'User-Agent': INNERTUBE_USER_AGENT }
+            });
+
+            if (xmlResp.ok) {
+              const xml = await xmlResp.text();
+              rawSegments = parseTranscriptXml(xml);
+            }
+          }
+        }
+      }
+    } catch (innerErr) {
+      console.warn("Direct InnerTube transcript fetch failed, trying npm fallback:", innerErr.message);
+    }
+
+    // Fallback using youtube-transcript package if direct fetch did not populate segments
+    if (!rawSegments || rawSegments.length === 0) {
+      console.log("Using youtube-transcript package fallback...");
+      const targetLang = lang || (detectedLang !== 'unknown' ? detectedLang : undefined);
+      const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId, targetLang ? { lang: targetLang } : undefined);
+      rawSegments = transcriptArray.map(item => ({
+        offset: item.offset > 1000 ? item.offset / 1000 : (item.offset || 0),
+        text: item.text
+      }));
+      if (!trackLabel && transcriptArray.length > 0) {
+        trackLabel = targetLang || 'original';
+      }
+    }
+
+    if (!rawSegments || rawSegments.length === 0) {
+      throw new Error("No caption text found for this video.");
+    }
+
+    // Structure segments into clean timestamped paragraph blocks
+    const { plainText, formattedText, blocks } = structureSegmentsIntoParagraphs(rawSegments);
+
+    res.json({
+      text: plainText,
+      formattedText: formattedText,
+      blocks: blocks,
+      language: detectedLang,
+      languageLabel: trackLabel || detectedLang
+    });
   } catch (error) {
     console.error(`Error fetching transcript:`, error.message);
     res.status(500).json({ error: 'Failed to fetch transcript. The video might not have captions.' });
@@ -52,24 +350,43 @@ app.post('/generate-notes', async (req, res) => {
     return res.status(500).json({ error: 'API Key not found in .env file on the server.' });
   }
 
-  const style = req.body.style || 'bullets';
+  // 2 note styles: "summary" (default) vs "notes"
+  const style = req.body.style || 'summary';
+  const language = req.body.language || 'en';
 
-  let styleInstruction = "Create comprehensive key takeaways organized with clear headings and actionable bullet points.";
-  if (style === 'summary') {
-    styleInstruction = "Create a concise executive summary in 2-3 structured paragraphs highlighting the core idea and main conclusions.";
-  } else if (style === 'deep-dive') {
-    styleInstruction = "Create an exhaustive in-depth breakdown covering context, step-by-step concepts, key quotes, actionable insights, and critical takeaways.";
+  let styleInstruction = "Create a crisp Quick Summary: 2 concise paragraphs covering the core topic, followed by 3 key bullet points.";
+  if (style === 'notes' || style === 'deep-dive') {
+    styleInstruction = "Create comprehensive, exhaustive study notes with clear bold headings, in-depth concept breakdown, important quotes, and actionable takeaways.";
+  }
+
+  let languageInstruction = "Regardless of the original language of the video or transcript, write ALL notes strictly in fluent, professional English.";
+  if (language === 'original') {
+    languageInstruction = "Write ALL notes in the PRIMARY ORIGINAL language used in the video transcript (e.g. if the video is in Hindi, write in Hindi; if Spanish, write in Spanish; if English, write in English). Preserve original terms.";
+  } else if (language === 'hi') {
+    languageInstruction = "Write ALL notes in natural, clear Hindi (Devanagari script), keeping technical terms understandable.";
+  } else if (language === 'hinglish') {
+    languageInstruction = "Write ALL notes in casual, easy-to-read Hinglish (Hindi written in Roman/English alphabet), commonly used by Indian students.";
+  } else if (language === 'es') {
+    languageInstruction = "Write ALL notes strictly in fluent, professional Spanish.";
+  } else if (language === 'fr') {
+    languageInstruction = "Write ALL notes strictly in fluent, professional French.";
+  } else if (language === 'de') {
+    languageInstruction = "Write ALL notes strictly in fluent, professional German.";
+  } else if (language === 'ja') {
+    languageInstruction = "Write ALL notes strictly in natural, professional Japanese.";
+  } else if (language !== 'en') {
+    languageInstruction = `Write ALL notes strictly in fluent, professional ${language}.`;
   }
 
   try {
-    console.log(`Generating AI notes with style: ${style}...`);
+    console.log(`Generating AI notes with style: ${style}, language: ${language}...`);
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     
     const promptText = `
       You are an expert note-taker. I will give you a video transcript.
       
-      CRITICAL LANGUAGE REQUIREMENT:
-      Regardless of the original language of the video or transcript (e.g. Hindi, Hinglish, Spanish, French, German, Japanese, etc.), you MUST generate and write ALL notes strictly and entirely in fluent, professional English. Do not respond in any other language.
+      LANGUAGE REQUIREMENT:
+      ${languageInstruction}
 
       STYLE & FORMATTING:
       ${styleInstruction}
@@ -132,9 +449,9 @@ app.post('/chat', async (req, res) => {
 Your job is to answer the user's questions about the video accurately, clearly, and concisely.
 
 CRITICAL RULES:
-1. Always respond in fluent, clear English.
+1. Respond naturally in the SAME language that the user writes in or requests (e.g., if asked in Hindi, Hinglish, Spanish, French, Japanese, etc., reply fluently in that language; if asked in English, reply in English).
 2. Anchor your answers directly to the video transcript provided below.
-3. If the user asks something not mentioned in the video, politely state that the video doesn't cover it, but offer a brief general explanation.
+3. If the user asks something not mentioned in the video, politely state that the video doesn't cover it, but offer a brief general explanation in their language.
 4. Format your responses with clean Markdown (bullet points, bold text, code blocks where appropriate).
 
 VIDEO TRANSCRIPT:

@@ -48,36 +48,71 @@
           </button>
         </div>
 
-        <!-- Note Style Selection -->
+        <!-- Note Style & Language Selection -->
         <div class="style-section">
-          <div class="section-label">NOTE STYLE</div>
-          <div class="style-chips">
-            <button class="chip" data-style="summary">
-              <span class="chip-icon">⚡</span>
-              <span>Summary</span>
+          <div class="section-header-row">
+            <div class="section-label">NOTE STYLE</div>
+            <div class="lang-selector-wrapper" title="Language for generated notes">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" class="lang-globe-icon">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+              <select id="notesLangSelect" class="lang-select">
+                <option value="en" selected>English</option>
+                <option value="original">Original (Video)</option>
+                <option value="hi">Hindi</option>
+                <option value="hinglish">Hinglish</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+                <option value="de">German</option>
+                <option value="ja">Japanese</option>
+              </select>
+            </div>
+          </div>
+          <div class="style-chips two-cols">
+            <button class="chip active" data-style="summary">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chip-svg">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              <span>Quick Summary</span>
             </button>
-            <button class="chip active" data-style="bullets">
-              <span class="chip-icon">📌</span>
-              <span>Key Takeaways</span>
-            </button>
-            <button class="chip" data-style="deep-dive">
-              <span class="chip-icon">🧠</span>
-              <span>Deep Dive</span>
+            <button class="chip" data-style="notes">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chip-svg">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+              <span>Notes</span>
             </button>
           </div>
         </div>
 
-        <!-- Primary Action -->
-        <button id="generateBtn" class="action-btn">
-          <span class="btn-glow"></span>
-          <span class="btn-content">
-            <svg class="spark-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M12 2l2.4 7.2L21.6 12l-7.2 2.8L12 22l-2.4-7.2L2.4 12l7.2-2.8L12 2z"/>
-            </svg>
-            <span id="btnText">Generate AI Notes</span>
-            <div class="spinner hidden" id="btnSpinner"></div>
-          </span>
-        </button>
+        <!-- Action Buttons: Generate Notes + View Transcript -->
+        <div class="action-buttons-group">
+          <button id="generateBtn" class="action-btn primary-btn">
+            <span class="btn-glow"></span>
+            <span class="btn-content">
+              <svg class="spark-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+                <path d="M12 2l2.4 7.2L21.6 12l-7.2 2.8L12 22l-2.4-7.2L2.4 12l7.2-2.8L12 2z"/>
+              </svg>
+              <span id="btnText">Generate AI Notes</span>
+              <div class="spinner hidden" id="btnSpinner"></div>
+            </span>
+          </button>
+
+          <button id="fetchTranscriptOnlyBtn" class="action-btn secondary-action-btn" title="View & download raw transcript without generating AI notes">
+            <span class="btn-content">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              </svg>
+              <span id="transcriptBtnText">Transcript</span>
+              <div class="spinner hidden" id="transcriptSpinner"></div>
+            </span>
+          </button>
+        </div>
       </div>
 
       <!-- Live Status Badge -->
@@ -139,6 +174,19 @@
               </svg>
               <span>Ask Video</span>
               <span class="chat-badge">AI</span>
+            </button>
+            <button id="tabTranscriptBtn" class="view-tab">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              </svg>
+              <span>Transcript</span>
+            </button>
+            <button id="clearVideoDataBtn" class="tab-action-btn" title="Reset & clear saved data for this video">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
             </button>
           </div>
 
@@ -202,6 +250,38 @@
                 </svg>
               </button>
             </div>
+          </div>
+
+          <!-- Pane 3: Raw Transcript View & Download -->
+          <div id="transcriptPane" class="tab-pane hidden">
+            <div class="notes-toolbar">
+              <div class="notes-meta">
+                <span id="transcriptWordCount" class="meta-tag">0 words</span>
+                <span id="transcriptLangBadge" class="meta-tag hidden" style="color: var(--crimson-primary); border-color: rgba(255, 0, 51, 0.3);"></span>
+              </div>
+              <div class="toolbar-actions">
+                <button id="copyTranscriptBtn" class="tool-btn" title="Copy raw transcript">
+                  <svg class="tool-icon default-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                  <svg class="tool-icon check-icon hidden" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <span id="copyTranscriptBtnText">Copy</span>
+                </button>
+                <button id="downloadTranscriptBtn" class="tool-btn" title="Export transcript as text file">
+                  <svg class="tool-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  <span>Export</span>
+                </button>
+              </div>
+            </div>
+            <!-- Transcript Body -->
+            <div id="transcriptContent" class="transcript-body"></div>
           </div>
         </div>
       </div>
