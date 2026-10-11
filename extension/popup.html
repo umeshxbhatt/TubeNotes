@@ -122,35 +122,87 @@
 
         <!-- Populated Notes View (Hidden until generated) -->
         <div id="notesView" class="notes-view hidden">
-          <!-- Action Toolbar -->
-          <div class="notes-toolbar">
-            <div class="notes-meta">
-              <span id="notesWordCount" class="meta-tag">0 words</span>
+          <!-- View Navigation Tabs -->
+          <div class="view-tabs">
+            <button id="tabNotesBtn" class="view-tab active">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+              <span>Notes</span>
+            </button>
+            <button id="tabChatBtn" class="view-tab">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span>Ask Video</span>
+              <span class="chat-badge">AI</span>
+            </button>
+          </div>
+
+          <!-- Pane 1: Notes Content -->
+          <div id="notesPane" class="tab-pane active">
+            <!-- Action Toolbar -->
+            <div class="notes-toolbar">
+              <div class="notes-meta">
+                <span id="notesWordCount" class="meta-tag">0 words</span>
+              </div>
+              <div class="toolbar-actions">
+                <button id="copyBtn" class="tool-btn" title="Copy notes to clipboard">
+                  <svg class="tool-icon default-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                  <svg class="tool-icon check-icon hidden" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <span id="copyBtnText">Copy</span>
+                </button>
+                <button id="downloadBtn" class="tool-btn" title="Download markdown notes">
+                  <svg class="tool-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  <span>Export</span>
+                </button>
+              </div>
             </div>
-            <div class="toolbar-actions">
-              <button id="copyBtn" class="tool-btn" title="Copy notes to clipboard">
-                <svg class="tool-icon default-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+
+            <!-- Notes Body -->
+            <div id="notesContent" class="markdown-body"></div>
+          </div>
+
+          <!-- Pane 2: Level 1 Interactive Chat -->
+          <div id="chatPane" class="tab-pane hidden">
+            <!-- Chat Messages Scroll Area -->
+            <div id="chatMessages" class="chat-messages">
+              <div class="chat-bubble-row bot">
+                <div class="chat-avatar">AI</div>
+                <div class="chat-bubble bot-msg">
+                  I'm ready! Ask me anything about this video (e.g. explain a concept, give code examples, or test your understanding).
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Suggestion Chips -->
+            <div id="chatSuggestions" class="chat-suggestions">
+              <button class="suggest-chip" data-prompt="Explain the key message in simple words">💡 Simplify main point</button>
+              <button class="suggest-chip" data-prompt="Give 3 practical actionable takeaways from this video">🎯 Action items</button>
+            </div>
+
+            <!-- Chat Input Bar -->
+            <div class="chat-input-bar">
+              <input type="text" id="chatInput" placeholder="Ask a follow-up question..." spellcheck="false" autocomplete="off">
+              <button id="sendChatBtn" class="send-btn" title="Send question">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                 </svg>
-                <svg class="tool-icon check-icon hidden" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                <span id="copyBtnText">Copy</span>
-              </button>
-              <button id="downloadBtn" class="tool-btn" title="Download markdown notes">
-                <svg class="tool-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                <span>Export</span>
               </button>
             </div>
           </div>
-
-          <!-- Notes Body -->
-          <div id="notesContent" class="markdown-body"></div>
         </div>
       </div>
     </main>

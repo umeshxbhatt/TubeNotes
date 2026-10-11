@@ -1,6 +1,6 @@
 // TubeNotes - Obsidian Crimson Extension Logic
 document.addEventListener('DOMContentLoaded', function () {
-  // UI Elements
+  // UI Elements - Controls
   const urlInput = document.getElementById('youtubeUrl');
   const clearInputBtn = document.getElementById('clearInputBtn');
   const detectTabBtn = document.getElementById('detectTabBtn');
@@ -19,6 +19,18 @@ document.addEventListener('DOMContentLoaded', function () {
   const notesContent = document.getElementById('notesContent');
   const notesWordCount = document.getElementById('notesWordCount');
 
+  // Level 1: View Navigation Tabs (Notes vs Chat)
+  const tabNotesBtn = document.getElementById('tabNotesBtn');
+  const tabChatBtn = document.getElementById('tabChatBtn');
+  const notesPane = document.getElementById('notesPane');
+  const chatPane = document.getElementById('chatPane');
+
+  // Level 1: Chat Elements
+  const chatMessages = document.getElementById('chatMessages');
+  const chatInput = document.getElementById('chatInput');
+  const sendChatBtn = document.getElementById('sendChatBtn');
+  const chatSuggestions = document.getElementById('chatSuggestions');
+
   // Actions
   const copyBtn = document.getElementById('copyBtn');
   const copyBtnText = document.getElementById('copyBtnText');
@@ -29,10 +41,12 @@ document.addEventListener('DOMContentLoaded', function () {
   // Chips
   const styleChips = document.querySelectorAll('.chip');
 
-  // State
+  // State Management
   let selectedStyle = 'bullets';
   let currentRawNotes = '';
   let currentVideoId = '';
+  let currentTranscript = '';
+  let chatHistory = []; // Level 1: Stores multi-turn history [{role: 'user'|'model', text: '...'}]
 
   // 1. Auto-detect active YouTube tab on popup launch
   autoDetectCurrentTab();
@@ -87,6 +101,11 @@ document.addEventListener('DOMContentLoaded', function () {
       // Step A: Fetch transcript from backend
       showStatus("Extracting video captions...", "info");
       const transcript = await fetchTranscript(videoId);
+      currentTranscript = transcript;
+      
+      // Reset Chat for new video
+      chatHistory = [];
+      resetChatMessages();
 
       // Step B: Send transcript to AI note generator
       showStatus("Synthesizing notes with Gemini AI...", "info");
@@ -96,6 +115,9 @@ document.addEventListener('DOMContentLoaded', function () {
       currentRawNotes = notes;
       renderNotes(notes);
       showStatus("Notes ready!", "success");
+
+      // Switch to Notes tab by default
+      switchTab('notes');
 
       setTimeout(() => {
         hideStatus();
@@ -113,7 +135,145 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // 6. Copy to clipboard
+  // 6. Level 1: Tab Switching (Notes vs Chat)
+  tabNotesBtn.addEventListener('click', () => switchTab('notes'));
+  tabChatBtn.addEventListener('click', () => switchTab('chat'));
+
+  function switchTab(tab) {
+    if (tab === 'notes') {
+      tabNotesBtn.classList.add('active');
+      tabChatBtn.classList.remove('active');
+      notesPane.classList.remove('hidden');
+      notesPane.classList.add('active');
+      chatPane.classList.add('hidden');
+      chatPane.classList.remove('active');
+    } else {
+      tabChatBtn.classList.add('active');
+      tabNotesBtn.classList.remove('active');
+      chatPane.classList.remove('hidden');
+      chatPane.classList.add('active');
+      notesPane.classList.add('hidden');
+      notesPane.classList.remove('active');
+      chatInput.focus();
+    }
+  }
+
+  // 7. Level 1: Conversational Chat Logic
+  sendChatBtn.addEventListener('click', handleChatSubmit);
+  chatInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleChatSubmit();
+    }
+  });
+
+  // Handle suggested prompt chips
+  if (chatSuggestions) {
+    chatSuggestions.addEventListener('click', function (e) {
+      const chip = e.target.closest('.suggest-chip');
+      if (chip && chip.dataset.prompt) {
+        chatInput.value = chip.dataset.prompt;
+        handleChatSubmit();
+      }
+    });
+  }
+
+  async function handleChatSubmit() {
+    const question = chatInput.value.trim();
+    if (!question) return;
+
+    if (!currentTranscript) {
+      showStatus("Please generate notes for a video first.", "error");
+      return;
+    }
+
+    // Append User Message to UI
+    appendChatMessage('user', question);
+    chatInput.value = '';
+    chatInput.disabled = true;
+    sendChatBtn.disabled = true;
+
+    // Append temporary thinking indicator
+    const thinkingRow = appendChatMessage('bot', '<em>Thinking...</em>', true);
+
+    try {
+      const response = await fetch('http://localhost:3000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: currentTranscript,
+          question: question,
+          history: chatHistory
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to get AI response.");
+      }
+
+      const data = await response.json();
+      const answer = data.answer || "No response received.";
+
+      // Replace thinking bubble with formatted answer
+      thinkingRow.remove();
+      appendChatMessage('bot', answer);
+
+      // Update state history for subsequent multi-turn context
+      chatHistory.push({ role: 'user', text: question });
+      chatHistory.push({ role: 'model', text: answer });
+
+    } catch (err) {
+      console.error("Chat Error:", err);
+      thinkingRow.remove();
+      appendChatMessage('bot', `⚠️ **Error:** ${err.message || 'Could not reach chat server.'}`);
+    } finally {
+      chatInput.disabled = false;
+      sendChatBtn.disabled = false;
+      chatInput.focus();
+    }
+  }
+
+  function appendChatMessage(sender, text, isHtml = false) {
+    const row = document.createElement('div');
+    row.className = `chat-bubble-row ${sender}`;
+
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble ${sender === 'user' ? 'user-msg' : 'bot-msg'}`;
+
+    if (sender === 'bot') {
+      const avatar = document.createElement('div');
+      avatar.className = 'chat-avatar';
+      avatar.textContent = 'AI';
+      row.appendChild(avatar);
+
+      if (isHtml) {
+        bubble.innerHTML = text;
+      } else {
+        bubble.innerHTML = formatMarkdown(text);
+      }
+    } else {
+      bubble.textContent = text;
+    }
+
+    row.appendChild(bubble);
+    chatMessages.appendChild(row);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return row;
+  }
+
+  function resetChatMessages() {
+    chatMessages.innerHTML = `
+      <div class="chat-bubble-row bot">
+        <div class="chat-avatar">AI</div>
+        <div class="chat-bubble bot-msg">
+          I've loaded the video transcript! Ask me anything about this video (e.g. explain a concept, give code examples, or test your understanding).
+        </div>
+      </div>
+    `;
+  }
+
+  // 8. Copy to clipboard
   copyBtn.addEventListener('click', async function () {
     if (!currentRawNotes) return;
     try {
@@ -134,7 +294,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // 7. Download / Export markdown file
+  // 9. Download / Export markdown file
   downloadBtn.addEventListener('click', function () {
     if (!currentRawNotes) return;
 
