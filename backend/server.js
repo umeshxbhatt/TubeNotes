@@ -52,14 +52,28 @@ app.post('/generate-notes', async (req, res) => {
     return res.status(500).json({ error: 'API Key not found in .env file on the server.' });
   }
 
+  const style = req.body.style || 'bullets';
+
+  let styleInstruction = "Create comprehensive key takeaways organized with clear headings and actionable bullet points.";
+  if (style === 'summary') {
+    styleInstruction = "Create a concise executive summary in 2-3 structured paragraphs highlighting the core idea and main conclusions.";
+  } else if (style === 'deep-dive') {
+    styleInstruction = "Create an exhaustive in-depth breakdown covering context, step-by-step concepts, key quotes, actionable insights, and critical takeaways.";
+  }
+
   try {
-    console.log("Generating AI notes...");
+    console.log(`Generating AI notes with style: ${style}...`);
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     
     const promptText = `
       You are an expert note-taker. I will give you a video transcript.
-      Please create well-structured, comprehensive notes in english language from it.
-      Use Markdown formatting (Headings, bullet points, bold text).
+      
+      CRITICAL LANGUAGE REQUIREMENT:
+      Regardless of the original language of the video or transcript (e.g. Hindi, Hinglish, Spanish, French, German, Japanese, etc.), you MUST generate and write ALL notes strictly and entirely in fluent, professional English. Do not respond in any other language.
+
+      STYLE & FORMATTING:
+      ${styleInstruction}
+      Use clean Markdown formatting (Headings, bullet points, bold text).
       
       Here is the transcript:
       ${transcript}

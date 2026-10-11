@@ -1,26 +1,161 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TubeNotes</title>
   <link rel="stylesheet" href="styles/popup.css">
 </head>
-
 <body>
-  <h2>TubeNotes</h2>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-badge">
+          <svg viewBox="0 0 24 24" class="logo-icon" fill="currentColor">
+            <path d="M21.58 7.19a2.7 2.7 0 0 0-1.9-1.9C18 4.75 12 4.75 12 4.75s-6 0-7.68.54a2.7 2.7 0 0 0-1.9 1.9A28.4 28.4 0 0 0 1.88 12a28.4 28.4 0 0 0 .54 4.81 2.7 2.7 0 0 0 1.9 1.9c1.68.54 7.68.54 7.68.54s6 0 7.68-.54a2.7 2.7 0 0 0 1.9-1.9c.36-1.56.54-3.18.54-4.81s-.18-3.25-.54-4.81zM9.75 15.02V8.98l5.5 3.02-5.5 3.02z"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>TubeNotes</h1>
+          <span class="version-tag">AI v1.0</span>
+        </div>
+      </div>
+      <button id="detectTabBtn" class="pill-btn secondary" title="Detect link from current YouTube tab">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+        <span>Current Tab</span>
+      </button>
+    </header>
 
-  <input type="text" id="youtubeUrl" placeholder="Paste YouTube Link Here...">
+    <!-- Main Content -->
+    <main class="main-body">
+      <!-- Input Card -->
+      <div class="input-card">
+        <div class="input-wrapper">
+          <svg class="input-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/>
+          </svg>
+          <input type="text" id="youtubeUrl" placeholder="Paste YouTube link or click Current Tab..." spellcheck="false" autocomplete="off">
+          <button id="clearInputBtn" class="clear-btn hidden" title="Clear input">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
 
-  <button id="generateBtn">Generate Notes</button>
+        <!-- Note Style Selection -->
+        <div class="style-section">
+          <div class="section-label">NOTE STYLE</div>
+          <div class="style-chips">
+            <button class="chip" data-style="summary">
+              <span class="chip-icon">⚡</span>
+              <span>Summary</span>
+            </button>
+            <button class="chip active" data-style="bullets">
+              <span class="chip-icon">📌</span>
+              <span>Key Takeaways</span>
+            </button>
+            <button class="chip" data-style="deep-dive">
+              <span class="chip-icon">🧠</span>
+              <span>Deep Dive</span>
+            </button>
+          </div>
+        </div>
 
-  <div id="status"></div>
-  
-  <!-- We will show this text area once the AI returns the notes! -->
-  <textarea id="notesOutput" rows="10" placeholder="Your AI notes will appear here..." style="display: none; width: 100%; margin-top: 10px;"></textarea>
+        <!-- Primary Action -->
+        <button id="generateBtn" class="action-btn">
+          <span class="btn-glow"></span>
+          <span class="btn-content">
+            <svg class="spark-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M12 2l2.4 7.2L21.6 12l-7.2 2.8L12 22l-2.4-7.2L2.4 12l7.2-2.8L12 2z"/>
+            </svg>
+            <span id="btnText">Generate AI Notes</span>
+            <div class="spinner hidden" id="btnSpinner"></div>
+          </span>
+        </button>
+      </div>
 
-  <!-- Download button, hidden until notes are ready -->
-  <button id="downloadBtn" style="display: none; margin-top: 10px;">Download Notes</button>
+      <!-- Live Status Badge -->
+      <div id="statusWrapper" class="status-wrapper hidden">
+        <div class="status-indicator">
+          <span class="pulse-dot"></span>
+          <span id="statusText">Initializing...</span>
+        </div>
+      </div>
+
+      <!-- Skeleton Loader (Shown during generation) -->
+      <div id="skeletonLoader" class="skeleton-container hidden">
+        <div class="skeleton-header">
+          <div class="skeleton-bar h-lg w-70"></div>
+          <div class="skeleton-bar h-sm w-30"></div>
+        </div>
+        <div class="skeleton-body">
+          <div class="skeleton-bar h-md w-90"></div>
+          <div class="skeleton-bar h-md w-100"></div>
+          <div class="skeleton-bar h-md w-80"></div>
+          <div class="skeleton-bar h-md w-95"></div>
+          <div class="skeleton-bar h-md w-60"></div>
+        </div>
+      </div>
+
+      <!-- Notes Container -->
+      <div id="notesContainer" class="notes-container">
+        <!-- Empty State Placeholder -->
+        <div id="emptyState" class="empty-state">
+          <div class="empty-icon-box">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <line x1="10" y1="9" x2="8" y2="9"/>
+            </svg>
+          </div>
+          <p class="empty-title">Ready for Your Video</p>
+          <p class="empty-desc">Paste a YouTube link above or click <strong>Current Tab</strong> to generate AI notes in seconds.</p>
+        </div>
+
+        <!-- Populated Notes View (Hidden until generated) -->
+        <div id="notesView" class="notes-view hidden">
+          <!-- Action Toolbar -->
+          <div class="notes-toolbar">
+            <div class="notes-meta">
+              <span id="notesWordCount" class="meta-tag">0 words</span>
+            </div>
+            <div class="toolbar-actions">
+              <button id="copyBtn" class="tool-btn" title="Copy notes to clipboard">
+                <svg class="tool-icon default-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                <svg class="tool-icon check-icon hidden" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <span id="copyBtnText">Copy</span>
+              </button>
+              <button id="downloadBtn" class="tool-btn" title="Download markdown notes">
+                <svg class="tool-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>Export</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Notes Body -->
+          <div id="notesContent" class="markdown-body"></div>
+        </div>
+      </div>
+    </main>
+  </div>
 
   <script src="popup.js"></script>
 </body>
-
 </html>
