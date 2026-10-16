@@ -352,30 +352,6 @@ body {
   font-size: 10.5px;
 }
 
-.prompt-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.prompt-tag {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 2px 7px;
-  font-size: 9.5px;
-  color: #9ca3af;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  user-select: none;
-}
-
-.prompt-tag:hover {
-  background: rgba(255, 0, 51, 0.12);
-  border-color: rgba(255, 0, 51, 0.35);
-  color: #ffffff;
-}
-
 /* ---------------- Action Buttons ---------------- */
 .action-buttons-group {
   display: flex;

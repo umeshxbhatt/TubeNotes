@@ -55,7 +55,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const styleChips = document.querySelectorAll('.chip');
   const customPromptInput = document.getElementById('customPromptInput');
   const clearPromptBtn = document.getElementById('clearPromptBtn');
-  const promptTags = document.getElementById('promptTags');
 
   // Fast Transcript Button
   const fetchTranscriptOnlyBtn = document.getElementById('fetchTranscriptOnlyBtn');
@@ -111,23 +110,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  if (promptTags) {
-    promptTags.addEventListener('click', function (e) {
-      const tag = e.target.closest('.prompt-tag');
-      if (!tag) return;
-      const textToInsert = tag.dataset.insert;
-      if (!textToInsert || !customPromptInput) return;
 
-      const currentVal = customPromptInput.value.trim();
-      if (!currentVal) {
-        customPromptInput.value = textToInsert;
-      } else if (!currentVal.toLowerCase().includes(textToInsert.toLowerCase())) {
-        customPromptInput.value = `${currentVal}, ${textToInsert}`;
-      }
-      toggleClearPromptBtn();
-      customPromptInput.focus();
-    });
-  }
 
   function toggleClearPromptBtn() {
     if (!clearPromptBtn || !customPromptInput) return;
