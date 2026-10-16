@@ -34,7 +34,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const chatMessages = document.getElementById('chatMessages');
   const chatInput = document.getElementById('chatInput');
   const sendChatBtn = document.getElementById('sendChatBtn');
-  const chatSuggestions = document.getElementById('chatSuggestions');
 
   // Transcript Elements
   const transcriptContent = document.getElementById('transcriptContent');
@@ -128,6 +127,37 @@ document.addEventListener('DOMContentLoaded', function () {
       clearInputBtn.classList.add('hidden');
     }
   }
+
+  // Keyboard shortcut: Press Enter to trigger note generation
+  urlInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      generateBtn.click();
+    }
+  });
+
+  if (customPromptInput) {
+    customPromptInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        generateBtn.click();
+      }
+    });
+  }
+
+  // Global Enter shortcut when popup is opened (as long as focus is not inside the Chat input or another button)
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const activeEl = document.activeElement;
+      // If user is typing in the chat input, chat already handles Enter
+      if (activeEl === chatInput) return;
+      // If already focused on an interactive button or link, let native click trigger
+      if (activeEl && (activeEl.tagName === 'BUTTON' || activeEl.tagName === 'A')) return;
+      
+      e.preventDefault();
+      generateBtn.click();
+    }
+  });
 
   // 4. Style Chip selector: toggles active style, displays notes & switches to Notes tab
   styleChips.forEach(chip => {
@@ -451,16 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // Handle suggested prompt chips
-  if (chatSuggestions) {
-    chatSuggestions.addEventListener('click', function (e) {
-      const chip = e.target.closest('.suggest-chip');
-      if (chip && chip.dataset.prompt) {
-        chatInput.value = chip.dataset.prompt;
-        handleChatSubmit();
-      }
-    });
-  }
+
 
   async function handleChatSubmit() {
     const question = chatInput.value.trim();
