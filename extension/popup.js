@@ -634,7 +634,7 @@ document.addEventListener('DOMContentLoaded', function () {
     URL.revokeObjectURL(url);
   });
 
-  // 10. Notes Copy & Download (copies currently selected style's notes)
+  // 10. Notes Copy & Download (copies currently selected style's notes with rich styling)
   copyBtn.addEventListener('click', async function () {
     const activeNotes = selectedStyle === 'summary' ? currentSummaryNotes : currentDetailedNotes;
     if (!activeNotes) {
@@ -643,7 +643,9 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     try {
-      await navigator.clipboard.writeText(activeNotes);
+      const htmlFormatted = formatMarkdown(activeNotes);
+      await copyRichAndPlainText(activeNotes, htmlFormatted);
+
       copyBtn.classList.add('copied');
       copyBtnText.textContent = "Copied!";
       copyDefaultIcon.classList.add('hidden');
@@ -657,8 +659,51 @@ document.addEventListener('DOMContentLoaded', function () {
       }, 2000);
     } catch (err) {
       console.error("Clipboard copy failed:", err);
+      showStatus("Failed to copy notes.", "error");
     }
   });
+
+  // Copies both rich HTML (for Apple Notes, Google Docs, Notion, Word) and plain text (for markdown editors)
+  async function copyRichAndPlainText(plainText, htmlText) {
+    // 1. Modern Async Clipboard API with ClipboardItem (standard in Chromium)
+    if (navigator.clipboard && window.ClipboardItem) {
+      try {
+        const blobHtml = new Blob([htmlText], { type: 'text/html' });
+        const blobText = new Blob([plainText], { type: 'text/plain' });
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': blobHtml,
+            'text/plain': blobText
+          })
+        ]);
+        return;
+      } catch (err) {
+        console.warn("Async ClipboardItem write failed, trying fallback:", err);
+      }
+    }
+
+    // 2. Fallback: Copy event listener (allows setting both text/html and text/plain)
+    let copied = false;
+    const copyListener = function (e) {
+      e.clipboardData.setData('text/html', htmlText);
+      e.clipboardData.setData('text/plain', plainText);
+      e.preventDefault();
+      copied = true;
+    };
+    document.addEventListener('copy', copyListener);
+    try {
+      document.execCommand('copy');
+    } catch (cmdErr) {
+      console.warn("execCommand copy error:", cmdErr);
+    } finally {
+      document.removeEventListener('copy', copyListener);
+    }
+
+    // 3. Fallback: write plain text
+    if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(plainText);
+    }
+  }
 
   downloadBtn.addEventListener('click', function () {
     const activeNotes = selectedStyle === 'summary' ? currentSummaryNotes : currentDetailedNotes;
@@ -668,8 +713,8 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
-    const filename = `TubeNotes_${currentVideoId || 'video'}_${selectedStyle}.md`;
-    const blob = new Blob([activeNotes], { type: 'text/markdown;charset=utf-8;' });
+    const filename = `TubeNotes_${currentVideoId || 'video'}_${selectedStyle}.txt`;
+    const blob = new Blob([activeNotes], { type: 'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -967,47 +1012,137 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // Lightweight safe Markdown to HTML parser
+  // Lightweight safe Markdown to HTML parser that generates clean semantic HTML for UI and Clipboard
   function formatMarkdown(md) {
     if (!md) return '';
 
-    // Escape HTML tags to prevent injection
-    let html = md
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    const lines = md.split('\n');
+    let html = [];
+    let inList = false;
+    let inOrderedList = false;
+    let inBlockquote = false;
+    let inCodeBlock = false;
+    let codeBlockLines = [];
 
-    // Headings
-    html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-    html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-    html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+    function closeBlocks() {
+      if (inList) { html.push('</ul>'); inList = false; }
+      if (inOrderedList) { html.push('</ol>'); inOrderedList = false; }
+      if (inBlockquote) { html.push('</blockquote>'); inBlockquote = false; }
+    }
 
-    // Bold & Italics
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    function inlineFormat(text) {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+    }
 
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+      let trimmed = line.trim();
 
-    // Blockquotes
-    html = html.replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>');
-
-    // Lists (unordered)
-    html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>)/gms, '<ul>$1</ul>');
-    // Clean up duplicate nested <ul> tags
-    html = html.replace(/<\/ul>\s*<ul>/g, '');
-
-    // Paragraphs / double line breaks
-    html = html.split(/\n\n+/).map(para => {
-      para = para.trim();
-      if (!para) return '';
-      if (/^<(h[1-3]|ul|blockquote)/i.test(para)) {
-        return para;
+      // Fenced code block (```)
+      if (trimmed.startsWith('```')) {
+        if (inCodeBlock) {
+          const codeContent = codeBlockLines
+            .map(l => l.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+            .join('\n');
+          html.push(`<pre><code>${codeContent}</code></pre>`);
+          codeBlockLines = [];
+          inCodeBlock = false;
+        } else {
+          closeBlocks();
+          inCodeBlock = true;
+          codeBlockLines = [];
+        }
+        continue;
       }
-      return `<p>${para.replace(/\n/g, '<br>')}</p>`;
-    }).join('');
 
-    return html;
+      if (inCodeBlock) {
+        codeBlockLines.push(line);
+        continue;
+      }
+
+      if (!trimmed) {
+        closeBlocks();
+        continue;
+      }
+
+      // Horizontal dividers (--- or *** or ___)
+      if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+        closeBlocks();
+        html.push('<hr>');
+        continue;
+      }
+
+      // Headings (# H1, ## H2, ### H3)
+      const hMatch = trimmed.match(/^(#{1,3})\s+(.*)$/);
+      if (hMatch) {
+        closeBlocks();
+        const level = hMatch[1].length;
+        html.push(`<h${level}>${inlineFormat(hMatch[2])}</h${level}>`);
+        continue;
+      }
+
+      // Blockquotes (> Quote)
+      const bqMatch = line.match(/^>\s?(.*)$/);
+      if (bqMatch) {
+        if (inList) { html.push('</ul>'); inList = false; }
+        if (inOrderedList) { html.push('</ol>'); inOrderedList = false; }
+        if (!inBlockquote) {
+          html.push('<blockquote>');
+          inBlockquote = true;
+        }
+        html.push(`<p>${inlineFormat(bqMatch[1])}</p>`);
+        continue;
+      } else if (inBlockquote) {
+        html.push('</blockquote>');
+        inBlockquote = false;
+      }
+
+      // Unordered lists (* or -)
+      const ulMatch = line.match(/^(\s*)[-*]\s+(.*)$/);
+      if (ulMatch) {
+        if (inOrderedList) { html.push('</ol>'); inOrderedList = false; }
+        if (!inList) {
+          html.push('<ul>');
+          inList = true;
+        }
+        const indent = ulMatch[1].length;
+        const style = indent >= 2 ? ` style="margin-left: ${Math.min(indent * 8, 32)}px"` : '';
+        html.push(`<li${style}>${inlineFormat(ulMatch[2])}</li>`);
+        continue;
+      }
+
+      // Ordered lists (1. or 2.)
+      const olMatch = line.match(/^(\s*)\d+\.\s+(.*)$/);
+      if (olMatch) {
+        if (inList) { html.push('</ul>'); inList = false; }
+        if (!inOrderedList) {
+          html.push('<ol>');
+          inOrderedList = true;
+        }
+        html.push(`<li>${inlineFormat(olMatch[2])}</li>`);
+        continue;
+      }
+
+      // Regular paragraph line
+      closeBlocks();
+      html.push(`<p>${inlineFormat(trimmed)}</p>`);
+    }
+
+    if (inCodeBlock) {
+      const codeContent = codeBlockLines
+        .map(l => l.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+        .join('\n');
+      html.push(`<pre><code>${codeContent}</code></pre>`);
+    }
+
+    closeBlocks();
+    return html.join('\n');
   }
 });

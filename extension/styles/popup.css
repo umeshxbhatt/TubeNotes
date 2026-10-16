@@ -724,6 +724,16 @@ body {
   font-style: italic;
 }
 
+.markdown-body blockquote p {
+  margin: 0;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 12px 0;
+}
+
 /* ---------------- View Tabs (Notes vs Chat) ---------------- */
 .view-tabs {
   display: flex;
