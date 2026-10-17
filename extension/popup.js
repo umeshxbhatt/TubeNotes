@@ -506,7 +506,7 @@ document.addEventListener('DOMContentLoaded', function () {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          transcript: currentTranscript,
+          transcript: currentFormattedTranscript || currentTranscript,
           question: question,
           history: chatHistory
         })
@@ -725,6 +725,21 @@ document.addEventListener('DOMContentLoaded', function () {
     URL.revokeObjectURL(url);
   });
 
+  // 11. Interactive Video Player Seeking (Event Delegation)
+  // Listens on transcript, notes, and chat panes for any timestamp click or keypress
+  if (transcriptContent) {
+    transcriptContent.addEventListener('click', handleTimestampClick);
+    transcriptContent.addEventListener('keydown', handleTimestampKeydown);
+  }
+  if (notesContent) {
+    notesContent.addEventListener('click', handleTimestampClick);
+    notesContent.addEventListener('keydown', handleTimestampKeydown);
+  }
+  if (chatMessages) {
+    chatMessages.addEventListener('click', handleTimestampClick);
+    chatMessages.addEventListener('keydown', handleTimestampKeydown);
+  }
+
   // ---------------- Persistent Storage Helpers ---------------- //
 
   async function getSavedVideoData(videoId) {
@@ -874,6 +889,157 @@ document.addEventListener('DOMContentLoaded', function () {
     return null;
   }
 
+  // ---------------- Interactive Video Player Seeking Engine ---------------- //
+
+  // Parse timestamp string into total seconds (e.g., "02:15" -> 135, "01:05:30" -> 3930)
+  function parseTimestampToSeconds(timeStr) {
+    if (!timeStr) return 0;
+    const clean = String(timeStr).replace(/[\[\]\(\)\s]/g, '').trim();
+    const parts = clean.split(':').map(p => parseInt(p, 10));
+    if (parts.some(isNaN)) return 0;
+
+    if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    } else if (parts.length === 1) {
+      return parts[0];
+    }
+    return 0;
+  }
+
+  // Format seconds to readable mm:ss or hh:mm:ss
+  function formatSecondsToTime(totalSeconds) {
+    const s = Math.floor(totalSeconds % 60);
+    const m = Math.floor((totalSeconds / 60) % 60);
+    const h = Math.floor(totalSeconds / 3600);
+    const pad = (n) => n.toString().padStart(2, '0');
+    if (h > 0) {
+      return `${h}:${pad(m)}:${pad(s)}`;
+    }
+    return `${pad(m)}:${pad(s)}`;
+  }
+
+  // Function injected into the YouTube tab's DOM context to seek playback
+  function injectedSeekPlayer(targetSeconds) {
+    try {
+      // Strategy 1: YouTube native player API (Recommended - updates UI progress bar & buffer)
+      const player = document.getElementById('movie_player') || document.querySelector('#movie_player');
+      if (player && typeof player.seekTo === 'function') {
+        player.seekTo(targetSeconds, true);
+        if (typeof player.playVideo === 'function') {
+          player.playVideo();
+        }
+        return { success: true, method: 'movie_player' };
+      }
+
+      // Strategy 2: Standard HTML5 video element fallback
+      const video = document.querySelector('video.html5-main-video') || document.querySelector('video');
+      if (video) {
+        video.currentTime = targetSeconds;
+        const playPromise = video.play();
+        if (playPromise !== undefined && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => {});
+        }
+        return { success: true, method: 'html5_video' };
+      }
+
+      return { success: false, reason: 'No video player found on page' };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  // Find target YouTube tab to seek (current active tab or open tab matching videoId)
+  async function getTargetYouTubeTab() {
+    if (typeof chrome === 'undefined' || !chrome.tabs || !chrome.tabs.query) return null;
+
+    try {
+      // 1. Current active tab in current window
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (activeTab && activeTab.url && (activeTab.url.includes('youtube.com/watch') || activeTab.url.includes('youtu.be/'))) {
+        return activeTab;
+      }
+
+      // 2. Find any open YouTube tab with matching videoId
+      if (currentVideoId) {
+        const tabs = await chrome.tabs.query({ url: '*://*.youtube.com/*' });
+        const match = tabs.find(t => t.url && t.url.includes(currentVideoId));
+        if (match) return match;
+        if (tabs.length > 0) return tabs[0];
+      }
+
+      return activeTab || null;
+    } catch (e) {
+      console.warn("Could not query tabs for seeking:", e);
+      return null;
+    }
+  }
+
+  // Seek YouTube video in active or matching tab using chrome.scripting.executeScript
+  async function seekVideoToTime(seconds, label = '') {
+    if (typeof chrome === 'undefined' || !chrome.scripting) {
+      console.warn("Chrome Scripting API is not available.");
+      return;
+    }
+
+    try {
+      const tab = await getTargetYouTubeTab();
+      if (!tab || !tab.id) {
+        showStatus("Please open a YouTube video tab to seek.", "error");
+        setTimeout(hideStatus, 2500);
+        return;
+      }
+
+      const displayTime = label || formatSecondsToTime(seconds);
+      showStatus(`▶ Seeking video to ${displayTime}...`, "info");
+
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: injectedSeekPlayer,
+        args: [seconds]
+      });
+
+      if (results && results[0] && results[0].result && results[0].result.success) {
+        showStatus(`⚡ Jumped to ${displayTime}!`, "success");
+        setTimeout(hideStatus, 1800);
+      } else {
+        setTimeout(hideStatus, 1500);
+      }
+    } catch (err) {
+      console.error("Seek script execution error:", err);
+      showStatus("Could not seek video in active tab.", "error");
+      setTimeout(hideStatus, 2500);
+    }
+  }
+
+  // Delegated click handler for seeking from any timestamp badge
+  function handleTimestampClick(e) {
+    const badge = e.target.closest('.transcript-time-badge, .interactive-timestamp-badge');
+    if (!badge) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Pulse micro-animation
+    badge.classList.add('seeking-active');
+    setTimeout(() => badge.classList.remove('seeking-active'), 350);
+
+    const rawTime = badge.dataset.timestamp || badge.textContent.replace(/[▶\s]/g, '').trim();
+    const seconds = parseTimestampToSeconds(rawTime);
+    seekVideoToTime(seconds, rawTime);
+  }
+
+  // Delegated keyboard accessibility handler (Enter / Space to seek)
+  function handleTimestampKeydown(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      const badge = e.target.closest('.transcript-time-badge, .interactive-timestamp-badge');
+      if (!badge) return;
+      e.preventDefault();
+      badge.click();
+    }
+  }
+
   // Fetch transcript from backend server
   async function fetchTranscript(videoId) {
     const response = await fetch(`http://localhost:3000/transcript?videoId=${encodeURIComponent(videoId)}`);
@@ -981,7 +1147,12 @@ document.addEventListener('DOMContentLoaded', function () {
     if (blocks && blocks.length > 0) {
       transcriptContent.innerHTML = blocks.map(b => `
         <div class="transcript-block" data-timestamp="${escapeHtml(b.timestamp)}">
-          <span class="transcript-time-badge" title="Timestamp [${escapeHtml(b.timestamp)}]">${escapeHtml(b.timestamp)}</span>
+          <span class="transcript-time-badge" role="button" tabindex="0" data-timestamp="${escapeHtml(b.timestamp)}" title="Jump video to ${escapeHtml(b.timestamp)}">
+            <svg class="seek-play-icon" viewBox="0 0 24 24" width="9" height="9" fill="currentColor">
+              <polygon points="6 4 20 12 6 20 6 4"/>
+            </svg>
+            ${escapeHtml(b.timestamp)}
+          </span>
           <span class="transcript-phrase-text">${escapeHtml(b.text)}</span>
         </div>
       `).join('');
@@ -1031,14 +1202,47 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function inlineFormat(text) {
-      return text
+      // 1. Escape HTML entities
+      let out = text
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/>/g, '&gt;');
+
+      // 2. Protect inline code tokens
+      const codeTokens = [];
+      out = out.replace(/`([^`]+)`/g, (_, code) => {
+        codeTokens.push(code);
+        return `___CODE_TOKEN_${codeTokens.length - 1}___`;
+      });
+
+      // 3. Bold and Italics
+      out = out
         .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+      // 4. Sanitize raw YouTube timestamp URLs (e.g. https://www.youtube.com/watch?v=VIDEO_ID&t=150s)
+      out = out.replace(/(?:\(|\[)?https?:\/\/(?:www\.)?youtube\.com\/watch\?[^\s\)]*?[?&]t=(\d+)s?(?:\)|\])?/gi, (_, sec) => {
+        const totalSec = parseInt(sec, 10);
+        return isNaN(totalSec) ? '' : `[${formatSecondsToTime(totalSec)}]`;
+      });
+
+      // 5. Interactive Timestamps: [mm:ss], (mm:ss), [hh:mm:ss], or standalone mm:ss / hh:mm:ss
+      const timestampRegex = /(?:\[|\()(\d{1,2}:\d{2}(?::\d{2})?)(?:\]|\))|(?<=\s|^)(\d{1,2}:\d{2}(?::\d{2})?)(?=\s|[,.\-—:]|$)/g;
+      out = out.replace(timestampRegex, (match, p1, p2) => {
+        const ts = p1 || p2;
+        const parts = ts.split(':').map(Number);
+        if (parts.length === 2 && parts[1] >= 60) return match;
+        if (parts.length === 3 && (parts[1] >= 60 || parts[2] >= 60)) return match;
+        return `<span class="interactive-timestamp-badge" role="button" tabindex="0" data-timestamp="${ts}" title="Jump video to ${ts}"><svg class="seek-play-icon" viewBox="0 0 24 24" width="9" height="9" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>${ts}</span>`;
+      });
+
+      // 6. Restore inline code
+      out = out.replace(/___CODE_TOKEN_(\d+)___/g, (_, idx) => {
+        return `<code>${codeTokens[Number(idx)]}</code>`;
+      });
+
+      return out;
     }
 
     for (let i = 0; i < lines.length; i++) {
