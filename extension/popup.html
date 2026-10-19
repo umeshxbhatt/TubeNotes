@@ -48,56 +48,50 @@
           </button>
         </div>
 
-        <!-- Note Style Selection (2 distinct styles + Custom Prompt) -->
-        <div class="style-section">
-          <div class="style-header-row">
-            <span class="section-label">NOTE STYLE & CUSTOM PROMPT</span>
+        <!-- Custom Prompt / Focus Input (Optional) -->
+        <div class="custom-prompt-section">
+          <div class="prompt-header-row">
+            <span class="section-label">CUSTOM FOCUS (OPTIONAL)</span>
             <button type="button" id="clearPromptBtn" class="clear-prompt-link hidden" title="Clear custom instruction">Clear</button>
           </div>
-          <div class="style-chips two-cols">
-            <button class="chip active" data-style="summary">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chip-svg">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-              </svg>
-              <span>Quick Summary</span>
-            </button>
-            <button class="chip" data-style="notes">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="chip-svg">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/>
-                <line x1="16" y1="17" x2="8" y2="17"/>
-              </svg>
-              <span>Detailed Notes</span>
-            </button>
-          </div>
-
-          <!-- Custom Prompt Bar -->
           <div class="custom-prompt-container">
             <div class="custom-prompt-input-wrapper">
-              <svg class="prompt-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <svg class="prompt-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 20h9"/>
                 <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
               </svg>
-              <input type="text" id="customPromptInput" class="custom-prompt-input" placeholder="Custom focus (optional): e.g. in Hinglish, key takeaways..." spellcheck="false" autocomplete="off" />
+              <input type="text" id="customPromptInput" class="custom-prompt-input" placeholder="e.g. in Hinglish, focus on code, exam bullet points..." spellcheck="false" autocomplete="off" />
             </div>
           </div>
         </div>
 
-        <!-- Action Buttons: Generate Notes + View Transcript -->
+        <!-- Action Buttons Group: Generate Notes (Primary) + Ask Video + Transcript -->
         <div class="action-buttons-group">
-          <button id="generateBtn" class="action-btn primary-btn">
+          <!-- 1. Primary: Generate Notes -->
+          <button id="generateBtn" class="action-btn primary-btn" title="Generate comprehensive AI study notes with timestamps (Press Enter)">
             <span class="btn-glow"></span>
             <span class="btn-content">
               <svg class="spark-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
                 <path d="M12 2l2.4 7.2L21.6 12l-7.2 2.8L12 22l-2.4-7.2L2.4 12l7.2-2.8L12 2z"/>
               </svg>
-              <span id="btnText">Generate AI Notes</span>
+              <span id="btnText">Generate Notes</span>
               <div class="spinner hidden" id="btnSpinner"></div>
             </span>
           </button>
 
-          <button id="fetchTranscriptOnlyBtn" class="action-btn secondary-action-btn" title="View & download raw transcript without generating AI notes">
+          <!-- 2. Secondary Accent: Ask Video Directly -->
+          <button id="askVideoDirectBtn" class="action-btn secondary-action-btn chat-action-btn" title="Ask questions about this video directly without generating notes">
+            <span class="btn-content">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span id="askVideoBtnText">Ask Video</span>
+              <div class="spinner hidden" id="askVideoSpinner"></div>
+            </span>
+          </button>
+
+          <!-- 3. Tertiary: View Raw Transcript -->
+          <button id="fetchTranscriptOnlyBtn" class="action-btn secondary-action-btn transcript-action-btn" title="View & download raw timestamped transcript">
             <span class="btn-content">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>

@@ -50,26 +50,28 @@ document.addEventListener('DOMContentLoaded', function () {
   const copyCheckIcon = copyBtn.querySelector('.check-icon');
   const downloadBtn = document.getElementById('downloadBtn');
 
-  // Style Chips & Custom Prompt Elements
-  const styleChips = document.querySelectorAll('.chip');
+  // Custom Prompt Input Elements
   const customPromptInput = document.getElementById('customPromptInput');
   const clearPromptBtn = document.getElementById('clearPromptBtn');
+
+  // Direct Ask Video Action Button
+  const askVideoDirectBtn = document.getElementById('askVideoDirectBtn');
+  const askVideoBtnText = document.getElementById('askVideoBtnText');
+  const askVideoSpinner = document.getElementById('askVideoSpinner');
 
   // Fast Transcript Button
   const fetchTranscriptOnlyBtn = document.getElementById('fetchTranscriptOnlyBtn');
   const transcriptBtnText = document.getElementById('transcriptBtnText');
   const transcriptSpinner = document.getElementById('transcriptSpinner');
 
-  // State Management - Separate slots for Quick Summary & Notes
-  let selectedStyle = 'summary'; // 'summary' | 'notes'
-  let currentSummaryNotes = '';  // Slot A: Quick Summary
-  let currentDetailedNotes = ''; // Slot B: Detailed Notes
+  // State Management - Master Notes, Transcript, and Chat
+  let currentNotes = '';         // Comprehensive Master Notes
   let currentVideoId = '';
   let currentTranscript = '';
   let currentFormattedTranscript = ''; // Text with [00:00] timestamps for copy & export
   let currentTranscriptBlocks = [];     // Structured array for UI badges
   let currentTranscriptLang = '';       // Detected original language label
-  let chatHistory = []; // Unified chat history for the video
+  let chatHistory = [];                 // Unified chat history for the video
 
   // 1. Auto-detect active YouTube tab on popup launch
   autoDetectCurrentTab();
@@ -159,94 +161,37 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // 4. Style Chip selector: toggles active style, displays notes & switches to Notes tab
-  styleChips.forEach(chip => {
-    chip.addEventListener('click', function () {
-      styleChips.forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      selectedStyle = chip.dataset.style || 'summary';
-      
-      // Update top button text
-      updateGenerateButtonText();
-
-      // If video content is loaded or notesView is active, open the Notes tab!
-      if (!notesView.classList.contains('hidden') || currentSummaryNotes || currentDetailedNotes || currentTranscript) {
-        emptyState.classList.add('hidden');
-        notesView.classList.remove('hidden');
-        displayCurrentStyleNotes();
-        switchTab('notes');
-      }
-    });
-  });
-
-  function setChipActive(styleName) {
-    styleChips.forEach(c => {
-      if (c.dataset.style === styleName) {
-        c.classList.add('active');
-        selectedStyle = styleName;
-      } else {
-        c.classList.remove('active');
-      }
-    });
-    updateGenerateButtonText();
-  }
-
   function updateGenerateButtonText() {
-    const isSummary = selectedStyle === 'summary';
-    btnText.textContent = isSummary ? "Generate Summary" : "Generate Notes";
+    if (btnText) btnText.textContent = "Generate Notes";
   }
 
-  // Display notes for whichever style chip is currently active
-  function displayCurrentStyleNotes() {
-    const isSummary = selectedStyle === 'summary';
-    const activeNotes = isSummary ? currentSummaryNotes : currentDetailedNotes;
-    const styleTitle = isSummary ? "Quick Summary" : "Detailed Notes";
-
+  // Display comprehensive notes in the notes pane
+  function displayNotes() {
     updateGenerateButtonText();
 
-    if (activeNotes && activeNotes.trim().length > 0) {
-      renderNotes(activeNotes);
+    if (currentNotes && currentNotes.trim().length > 0) {
+      renderNotes(currentNotes);
     } else {
-      // Notes for this style have not been generated yet
       notesWordCount.textContent = "0 words";
-
-      // Modern dark aesthetic SVG icons
-      const heroIconSvg = isSummary
-        ? `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-           </svg>`
-        : `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-             <polyline points="14 2 14 8 20 8"/>
-             <line x1="16" y1="13" x2="8" y2="13"/>
-             <line x1="16" y1="17" x2="8" y2="17"/>
-           </svg>`;
-
-      const btnIconSvg = isSummary
-        ? `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-           </svg>`
-        : `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-             <polyline points="14 2 14 8 20 8"/>
-             <line x1="16" y1="13" x2="8" y2="13"/>
-             <line x1="16" y1="17" x2="8" y2="17"/>
-           </svg>`;
-
       notesContent.innerHTML = `
         <div style="text-align: center; padding: 36px 16px; color: #9ca3af;">
           <div style="margin: 0 auto 12px; width: 48px; height: 48px; border-radius: 50%; background: rgba(255, 0, 51, 0.08); border: 1px solid rgba(255, 0, 51, 0.2); display: flex; align-items: center; justify-content: center; color: var(--crimson-primary); box-shadow: 0 0 16px rgba(255, 0, 51, 0.15);">
-            ${heroIconSvg}
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
           </div>
-          <p style="font-size: 14px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">No ${styleTitle} Yet</p>
+          <p style="font-size: 14px; font-weight: 600; color: #ffffff; margin-bottom: 6px;">No Notes Generated Yet</p>
           <p style="font-size: 11.5px; color: #6b7280; margin-bottom: 18px; max-width: 260px; margin-left: auto; margin-right: auto; line-height: 1.5;">
-            ${isSummary 
-              ? 'Want a fast 30-second overview? Click below to generate your Quick Summary.' 
-              : 'Want in-depth structured study notes? Click below to generate Detailed Notes.'}
+            Want comprehensive study notes with interactive timestamps? Click below to generate them in seconds.
           </p>
           <button id="inlineGenerateStyleBtn" class="action-btn primary-btn" style="margin: 0 auto; max-width: 220px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;">
-            ${btnIconSvg}
-            <span>Generate ${styleTitle}</span>
+            <svg class="spark-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+              <path d="M12 2l2.4 7.2L21.6 12l-7.2 2.8L12 22l-2.4-7.2L2.4 12l7.2-2.8L12 2z"/>
+            </svg>
+            <span>Generate Notes</span>
           </button>
         </div>
       `;
@@ -258,7 +203,139 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // 5A. Fast Action: View Transcript Only (Instant, 0 AI tokens)
+  // 4A. Primary Action: Generate AI Notes (Comprehensive with Timestamps)
+  generateBtn.addEventListener('click', async function () {
+    const rawUrl = urlInput.value.trim();
+    const videoId = extractVideoId(rawUrl);
+
+    if (!videoId) {
+      showStatus("Please enter a valid YouTube video link.", "error");
+      return;
+    }
+
+    currentVideoId = videoId;
+    setLoadingState(true, "Preparing comprehensive notes...");
+
+    try {
+      // Step A: Fetch transcript only if we don't already have it
+      if (!currentTranscript) {
+        showStatus("Extracting video captions...", "info");
+        const transcriptData = await fetchTranscript(videoId);
+        renderTranscript(transcriptData);
+      }
+
+      // Step B: Send timestamped transcript to AI note generator
+      const customPrompt = customPromptInput ? customPromptInput.value.trim() : '';
+      showStatus("Synthesizing comprehensive notes with Gemini AI...", "info");
+
+      // CRITICAL FIX: Pass the timestamped formatted transcript so Gemini anchors accurate timestamps!
+      const transcriptToSend = currentFormattedTranscript || currentTranscript;
+      const generatedNotes = await generateAINotes(transcriptToSend, 'notes', customPrompt);
+
+      currentNotes = generatedNotes;
+
+      // Display the newly generated notes
+      displayNotes();
+
+      // Step C: Save complete video state to persistent storage
+      await saveVideoData(videoId, {
+        videoId: videoId,
+        url: rawUrl,
+        notes: currentNotes,
+        customPrompt: customPrompt,
+        transcript: currentTranscript,
+        formattedTranscript: currentFormattedTranscript,
+        transcriptBlocks: currentTranscriptBlocks,
+        transcriptLang: currentTranscriptLang,
+        chatHistory: chatHistory,
+        savedAt: Date.now()
+      });
+
+      showStatus("Master notes ready & saved!", "success");
+      emptyState.classList.add('hidden');
+      notesView.classList.remove('hidden');
+      switchTab('notes');
+
+      setTimeout(() => {
+        hideStatus();
+      }, 3500);
+
+    } catch (err) {
+      console.error("TubeNotes Error:", err);
+      showStatus(err.message || "Failed to generate notes. Check backend.", "error");
+      skeletonLoader.classList.add('hidden');
+      if (!currentNotes && !currentTranscript) {
+        emptyState.classList.remove('hidden');
+      }
+    } finally {
+      setLoadingState(false);
+    }
+  });
+
+  // 4B. Direct Action: Ask Video Directly (Loads transcript & immediately opens Chat, 0 notes tokens)
+  if (askVideoDirectBtn) {
+    askVideoDirectBtn.addEventListener('click', async function () {
+      const rawUrl = urlInput.value.trim();
+      const videoId = extractVideoId(rawUrl);
+
+      if (!videoId) {
+        showStatus("Please enter a valid YouTube video link.", "error");
+        return;
+      }
+
+      currentVideoId = videoId;
+
+      // If transcript already loaded for this video, immediately jump into chat!
+      if (currentTranscript && currentVideoId === videoId) {
+        emptyState.classList.add('hidden');
+        notesView.classList.remove('hidden');
+        switchTab('chat');
+        chatInput.focus();
+        return;
+      }
+
+      askVideoDirectBtn.disabled = true;
+      if (askVideoSpinner) askVideoSpinner.classList.remove('hidden');
+      if (askVideoBtnText) askVideoBtnText.textContent = "Loading...";
+      showStatus("Connecting to video transcript for Q&A...", "info");
+
+      try {
+        const transcriptData = await fetchTranscript(videoId);
+        renderTranscript(transcriptData);
+        displayNotes();
+
+        // Save state
+        await saveVideoData(videoId, {
+          videoId: videoId,
+          url: rawUrl,
+          notes: currentNotes,
+          transcript: currentTranscript,
+          formattedTranscript: currentFormattedTranscript,
+          transcriptBlocks: currentTranscriptBlocks,
+          transcriptLang: currentTranscriptLang,
+          chatHistory: chatHistory,
+          savedAt: Date.now()
+        });
+
+        emptyState.classList.add('hidden');
+        notesView.classList.remove('hidden');
+        switchTab('chat');
+        chatInput.focus();
+        showStatus("Ready! Ask anything about this video.", "success");
+        setTimeout(hideStatus, 2500);
+
+      } catch (err) {
+        console.error("Ask Video Init Error:", err);
+        showStatus(err.message || "Failed to load video captions.", "error");
+      } finally {
+        askVideoDirectBtn.disabled = false;
+        if (askVideoSpinner) askVideoSpinner.classList.add('hidden');
+        if (askVideoBtnText) askVideoBtnText.textContent = "Ask Video";
+      }
+    });
+  }
+
+  // 4C. Fast Action: View Transcript Only (Instant, 0 AI tokens)
   if (fetchTranscriptOnlyBtn) {
     fetchTranscriptOnlyBtn.addEventListener('click', async function () {
       const rawUrl = urlInput.value.trim();
@@ -286,17 +363,13 @@ document.addEventListener('DOMContentLoaded', function () {
       try {
         const transcriptData = await fetchTranscript(videoId);
         renderTranscript(transcriptData);
-
-        // Display current style state in notes view
-        displayCurrentStyleNotes();
+        displayNotes();
 
         // Save to storage so it persists
         await saveVideoData(videoId, {
           videoId: videoId,
           url: rawUrl,
-          summaryNotes: currentSummaryNotes,
-          detailedNotes: currentDetailedNotes,
-          style: selectedStyle,
+          notes: currentNotes,
           transcript: currentTranscript,
           formattedTranscript: currentFormattedTranscript,
           transcriptBlocks: currentTranscriptBlocks,
@@ -321,82 +394,6 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
   }
-
-  // 5B. Primary Action: Generate AI Notes Button
-  generateBtn.addEventListener('click', async function () {
-    const rawUrl = urlInput.value.trim();
-    const videoId = extractVideoId(rawUrl);
-
-    if (!videoId) {
-      showStatus("Please enter a valid YouTube video link.", "error");
-      return;
-    }
-
-    currentVideoId = videoId;
-    const isSummary = selectedStyle === 'summary';
-    const styleLabel = isSummary ? "Quick Summary" : "Detailed Notes";
-
-    setLoadingState(true, `Preparing ${styleLabel}...`);
-
-    try {
-      // Step A: Fetch transcript only if we don't already have it
-      if (!currentTranscript) {
-        showStatus("Extracting video captions...", "info");
-        const transcriptData = await fetchTranscript(videoId);
-        renderTranscript(transcriptData);
-      }
-
-      // Step B: Send transcript to AI note generator for the selected style & custom prompt
-      const customPrompt = customPromptInput ? customPromptInput.value.trim() : '';
-      showStatus(`Synthesizing ${styleLabel} with Gemini AI...`, "info");
-      const generatedNotes = await generateAINotes(currentTranscript, selectedStyle, customPrompt);
-
-      // Step C: Save into the appropriate style slot
-      if (isSummary) {
-        currentSummaryNotes = generatedNotes;
-      } else {
-        currentDetailedNotes = generatedNotes;
-      }
-
-      // Display the newly generated notes
-      displayCurrentStyleNotes();
-
-      // Step D: Save complete video state to persistent storage
-      await saveVideoData(videoId, {
-        videoId: videoId,
-        url: rawUrl,
-        summaryNotes: currentSummaryNotes,
-        detailedNotes: currentDetailedNotes,
-        style: selectedStyle,
-        customPrompt: customPrompt,
-        transcript: currentTranscript,
-        formattedTranscript: currentFormattedTranscript,
-        transcriptBlocks: currentTranscriptBlocks,
-        transcriptLang: currentTranscriptLang,
-        chatHistory: chatHistory,
-        savedAt: Date.now()
-      });
-
-      showStatus(`${styleLabel} ready & saved!`, "success");
-      emptyState.classList.add('hidden');
-      notesView.classList.remove('hidden');
-      switchTab('notes');
-
-      setTimeout(() => {
-        hideStatus();
-      }, 3500);
-
-    } catch (err) {
-      console.error("TubeNotes Error:", err);
-      showStatus(err.message || "Failed to generate notes. Check backend.", "error");
-      skeletonLoader.classList.add('hidden');
-      if (!currentSummaryNotes && !currentDetailedNotes && !currentTranscript) {
-        emptyState.classList.remove('hidden');
-      }
-    } finally {
-      setLoadingState(false);
-    }
-  });
 
   // 6. View Navigation Tabs (Notes vs Chat vs Transcript)
   tabNotesBtn.addEventListener('click', () => switchTab('notes'));
@@ -445,8 +442,7 @@ document.addEventListener('DOMContentLoaded', function () {
         await removeSavedVideoData(vid);
       }
       currentVideoId = '';
-      currentSummaryNotes = '';
-      currentDetailedNotes = '';
+      currentNotes = '';
       currentTranscript = '';
       currentFormattedTranscript = '';
       currentTranscriptBlocks = [];
@@ -533,9 +529,7 @@ document.addEventListener('DOMContentLoaded', function () {
         await saveVideoData(currentVideoId, {
           videoId: currentVideoId,
           url: urlInput.value.trim(),
-          summaryNotes: currentSummaryNotes,
-          detailedNotes: currentDetailedNotes,
-          style: selectedStyle,
+          notes: currentNotes,
           transcript: currentTranscript,
           formattedTranscript: currentFormattedTranscript,
           transcriptBlocks: currentTranscriptBlocks,
@@ -634,17 +628,16 @@ document.addEventListener('DOMContentLoaded', function () {
     URL.revokeObjectURL(url);
   });
 
-  // 10. Notes Copy & Download (copies currently selected style's notes with rich styling)
+  // 10. Notes Copy & Download (copies comprehensive notes with rich formatting)
   copyBtn.addEventListener('click', async function () {
-    const activeNotes = selectedStyle === 'summary' ? currentSummaryNotes : currentDetailedNotes;
-    if (!activeNotes) {
-      showStatus("Generate notes for this style first.", "error");
+    if (!currentNotes) {
+      showStatus("Generate notes first.", "error");
       setTimeout(hideStatus, 2000);
       return;
     }
     try {
-      const htmlFormatted = formatMarkdown(activeNotes);
-      await copyRichAndPlainText(activeNotes, htmlFormatted);
+      const htmlFormatted = formatMarkdown(currentNotes);
+      await copyRichAndPlainText(currentNotes, htmlFormatted);
 
       copyBtn.classList.add('copied');
       copyBtnText.textContent = "Copied!";
@@ -706,15 +699,14 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   downloadBtn.addEventListener('click', function () {
-    const activeNotes = selectedStyle === 'summary' ? currentSummaryNotes : currentDetailedNotes;
-    if (!activeNotes) {
-      showStatus("Generate notes for this style first.", "error");
+    if (!currentNotes) {
+      showStatus("Generate notes first.", "error");
       setTimeout(hideStatus, 2000);
       return;
     }
 
-    const filename = `TubeNotes_${currentVideoId || 'video'}_${selectedStyle}.txt`;
-    const blob = new Blob([activeNotes], { type: 'text/plain;charset=utf-8;' });
+    const filename = `TubeNotes_${currentVideoId || 'video'}_notes.txt`;
+    const blob = new Blob([currentNotes], { type: 'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -796,22 +788,15 @@ document.addEventListener('DOMContentLoaded', function () {
       currentTranscriptLang = saved.transcriptLang || saved.languageLabel || '';
       chatHistory = saved.chatHistory || [];
 
-      // Restore separate slots (with backward compatibility)
-      currentSummaryNotes = saved.summaryNotes || (saved.style === 'summary' ? saved.notes : '') || '';
-      currentDetailedNotes = saved.detailedNotes || (saved.style !== 'summary' ? saved.notes : '') || '';
-
-      if (saved.style) {
-        setChipActive(saved.style);
-      } else {
-        setChipActive('summary');
-      }
+      // Restore master notes (backward compatible with older saves)
+      currentNotes = saved.notes || saved.detailedNotes || saved.summaryNotes || '';
 
       if (customPromptInput) {
         customPromptInput.value = saved.customPrompt || '';
         toggleClearPromptBtn();
       }
 
-      displayCurrentStyleNotes();
+      displayNotes();
 
       if (currentTranscriptBlocks && currentTranscriptBlocks.length > 0) {
         renderTranscript({

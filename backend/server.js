@@ -350,10 +350,32 @@ app.post('/generate-notes', async (req, res) => {
     return res.status(500).json({ error: 'API Key not found in .env file on the server.' });
   }
 
-  let styleInstruction = "Create a crisp Quick Summary: 2 concise paragraphs covering the core topic, followed by 3 key bullet points.";
-  if (style === 'notes' || style === 'deep-dive') {
-    styleInstruction = "Create comprehensive, exhaustive study notes with clear bold headings, in-depth concept breakdown, important quotes, and actionable takeaways.";
-  }
+  let baseStyleInstruction = `
+    You are an expert research analyst and world-class note-taker. Produce the ultimate comprehensive, highly structured master study notes for this video based on the transcript provided below.
+
+    CORE OBJECTIVES:
+    1. EXHAUSTIVE COVERAGE: Thoroughly cover the ENTIRE video from beginning to end. Do not rush, skip later sections, or summarize superficially.
+    2. ACCURATE TIMESTAMPS: Embed precise bracketed timestamps [mm:ss] or [hh:mm:ss] (e.g. [01:45], [12:30], [01:05:12]) for all major topic transitions, key explanations, and critical highlights. Timestamps MUST match actual timecodes from the transcript.
+    3. NO URLS: NEVER generate full YouTube URLs, raw query parameters, or raw seconds (e.g., DO NOT write https://youtube.com/... or &t=120s). Only write clean bracketed timestamps like [02:15].
+    4. RICH FORMATTING: Use clean, professional Markdown with H2 (##) and H3 (###) headers, bold technical keywords, organized bullet points, and code blocks or blockquotes where appropriate.
+
+    REQUIRED NOTE STRUCTURE:
+    ## 📌 Executive Summary
+    A high-yield overview (2 concise paragraphs) capturing the video's core mission, main thesis, and overarching takeaway.
+
+    ## ⏱️ Timeline & Key Chapters
+    A chronological breakdown of the entire video's progression with accurate timestamps:
+    - [mm:ss] **Topic / Segment Title**: Clear, informative summary of what is explained or demonstrated at this timestamp.
+
+    ## 🧠 In-Depth Core Concepts & Explanations
+    Deep-dive breakdown of each core principle, technique, argument, or step taught in the video:
+    - Group into logical subheadings (### Concept Name)
+    - Detail mechanisms, principles, formulas, code snippets, or nuances discussed by the speaker.
+    - Explain *why* things work, not just *what* they are.
+
+    ## 💡 Key Takeaways & Actionable Insights
+    Bullet points highlighting the most memorable lessons, practical rules of thumb, or next action steps.
+  `;
 
   // Language & Custom Focus handling
   const cleanPrompt = (customPrompt || '').trim();
@@ -378,21 +400,17 @@ app.post('/generate-notes', async (req, res) => {
   }
 
   try {
-    console.log(`Generating AI notes (style: ${style}, customPrompt: "${cleanPrompt}")...`);
+    console.log(`Generating comprehensive AI notes (customPrompt: "${cleanPrompt}")...`);
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     
     const promptText = `
-      You are an expert note-taker. I will give you a video transcript.
+      ${baseStyleInstruction}
       
       LANGUAGE INSTRUCTION:
       ${languageInstruction}
-
-      BASE STYLE & FORMATTING:
-      ${styleInstruction}
-      Use clean Markdown formatting (Headings, bullet points, bold text).
       ${customFocusBlock}
 
-      Here is the transcript:
+      TRANSCRIPT WITH TIMESTAMPS:
       ${transcript}
     `;
 
@@ -411,9 +429,13 @@ app.post('/generate-notes', async (req, res) => {
     }
 
     const data = await response.json();
-    const generatedText = data.candidates[0].content.parts[0].text;
+    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
-    console.log("Notes generated successfully!");
+    if (!generatedText) {
+      throw new Error("No notes content returned by AI.");
+    }
+    
+    console.log("Comprehensive notes generated successfully!");
     res.json({ notes: generatedText });
 
   } catch (error) {
