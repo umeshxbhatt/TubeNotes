@@ -1469,20 +1469,14 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
-      const displayTime = label || formatSecondsToTime(seconds);
-      showStatus(`▶ Seeking video to ${displayTime}...`, "info");
-
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: injectedSeekPlayer,
         args: [seconds]
       });
 
-      if (results && results[0] && results[0].result && results[0].result.success) {
-        showStatus(`⚡ Jumped to ${displayTime}!`, "success");
-        setTimeout(hideStatus, 1800);
-      } else {
-        setTimeout(hideStatus, 1500);
+      if (!results || !results[0] || !results[0].result || !results[0].result.success) {
+        console.warn("Could not seek video player:", results?.[0]?.result);
       }
     } catch (err) {
       console.error("Seek script execution error:", err);

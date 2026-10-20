@@ -289,6 +289,13 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ---------------- Main Body Layout ---------------- */
+.main-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* ---------------- Input Card ---------------- */
 .input-card {
   display: flex;
@@ -1362,6 +1369,7 @@ body.is-sidepanel .main-body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  gap: 8px;
 }
 
 body.is-sidepanel .notes-container {
