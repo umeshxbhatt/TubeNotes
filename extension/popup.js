@@ -79,13 +79,9 @@ document.addEventListener('DOMContentLoaded', function () {
   // Chat Suggestion Chips
   const chatSuggestions = document.getElementById('chatSuggestions');
 
-  // Side Panel Elements & Tab Change Banner
+  // Side Panel Elements
   const openSidePanelBtn = document.getElementById('openSidePanelBtn');
   const sidePanelBadge = document.getElementById('sidePanelBadge');
-  const tabSwitchBanner = document.getElementById('tabSwitchBanner');
-  const tabSwitchText = document.getElementById('tabSwitchText');
-  const switchVideoBtn = document.getElementById('switchVideoBtn');
-  const dismissSwitchBtn = document.getElementById('dismissSwitchBtn');
 
   // State Management - Master Notes, Video Title, Transcript, and Chat
   let currentNotes = '';         // Comprehensive Master Notes
@@ -97,12 +93,11 @@ document.addEventListener('DOMContentLoaded', function () {
   let currentTranscriptLang = '';       // Detected original language label
   let chatHistory = [];                 // Unified chat history for the video
 
-  // Side Panel State
+  // Side Panel State & Generation Guard
   let isSidePanel = false;
+  let isGeneratingNotes = false;
   let currentTabId = null;
   let currentWindowId = null;
-  let pendingSwitchUrl = '';
-  let pendingSwitchTitle = '';
 
   // Proactively capture current window ID to eliminate async delays on click
   if (typeof chrome !== 'undefined' && chrome.windows && chrome.windows.getCurrent) {
@@ -198,48 +193,29 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Active Tab Switch Listener (for Side Panel mode)
+  // Active Tab Switch Listener (Direct Instant Auto-Sync for Side Panel mode)
   if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
-    chrome.runtime.onMessage.addListener(function (message) {
+    chrome.runtime.onMessage.addListener(async function (message) {
       if (message.action === 'YOUTUBE_TAB_CHANGED' && isSidePanel) {
+        // Generation guard: do not interrupt ongoing AI synthesis
+        if (isGeneratingNotes) return;
+
         const newVid = extractVideoId(message.url);
         if (newVid && newVid !== currentVideoId) {
-          // If no content is currently active/generated, switch instantly
-          if (!currentNotes && !currentTranscript && (!chatHistory || chatHistory.length === 0)) {
-            urlInput.value = message.url;
-            toggleClearButton();
-            autoDetectCurrentTab(false);
-          } else {
-            // Content exists: show non-intrusive banner offering to load new video
-            pendingSwitchUrl = message.url;
-            pendingSwitchTitle = message.title || 'New YouTube Video';
-            if (tabSwitchBanner && tabSwitchText) {
-              const displayTitle = pendingSwitchTitle.replace(/ - YouTube$/, '').trim();
-              tabSwitchText.textContent = `New video active: "${displayTitle}"`;
-              tabSwitchBanner.classList.remove('hidden');
-            }
+          urlInput.value = message.url;
+          toggleClearButton();
+
+          const restored = await checkAndRestoreSavedVideo(newVid);
+          const title = message.title || await ensureVideoTitle(newVid);
+          if (title) currentVideoTitle = title;
+
+          if (!restored) {
+            resetVideoUI(newVid, title);
+            showStatus("Synced with active video. Ready to generate!", "success");
+            setTimeout(hideStatus, 2500);
           }
         }
       }
-    });
-  }
-
-  if (switchVideoBtn) {
-    switchVideoBtn.addEventListener('click', async function () {
-      if (pendingSwitchUrl) {
-        urlInput.value = pendingSwitchUrl;
-        toggleClearButton();
-        if (tabSwitchBanner) tabSwitchBanner.classList.add('hidden');
-        await autoDetectCurrentTab(false);
-        pendingSwitchUrl = '';
-      }
-    });
-  }
-
-  if (dismissSwitchBtn) {
-    dismissSwitchBtn.addEventListener('click', function () {
-      if (tabSwitchBanner) tabSwitchBanner.classList.add('hidden');
-      pendingSwitchUrl = '';
     });
   }
 
@@ -252,11 +228,14 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // 3. Input management & Clear button
-  urlInput.addEventListener('input', function () {
+  urlInput.addEventListener('input', async function () {
     toggleClearButton();
     const vid = extractVideoId(urlInput.value.trim());
     if (vid && vid !== currentVideoId) {
-      checkAndRestoreSavedVideo(vid);
+      const restored = await checkAndRestoreSavedVideo(vid);
+      if (!restored) {
+        resetVideoUI(vid, '');
+      }
     }
   });
 
@@ -393,6 +372,40 @@ document.addEventListener('DOMContentLoaded', function () {
       emptyState.classList.remove('hidden');
     }
     displayNotes();
+  }
+
+  // Reset all video state, DOM views, and transcript caches when switching videos
+  function resetVideoUI(newVideoId = '', newVideoTitle = '') {
+    currentVideoId = newVideoId;
+    currentVideoTitle = newVideoTitle;
+    currentNotes = '';
+    currentTranscript = '';
+    currentFormattedTranscript = '';
+    currentTranscriptBlocks = [];
+    currentTranscriptLang = '';
+    chatHistory = [];
+
+    if (customPromptInput) {
+      customPromptInput.value = '';
+      updatePromptUIState();
+      collapsePromptInput();
+    }
+    if (customPromptSection) {
+      customPromptSection.classList.remove('hidden');
+    }
+
+    if (notesContent) notesContent.innerHTML = '';
+    if (transcriptContent) transcriptContent.innerHTML = '';
+    if (notesWordCount) notesWordCount.textContent = '0 words';
+    if (transcriptWordCount) transcriptWordCount.textContent = '0 words';
+    if (transcriptLangBadge) {
+      transcriptLangBadge.textContent = '';
+      transcriptLangBadge.classList.add('hidden');
+    }
+
+    resetChatMessages();
+    setContentActive(false);
+    switchTab('notes');
   }
 
   function updateGenerateButtonText() {
@@ -537,6 +550,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
+      isGeneratingNotes = true;
       askVideoDirectBtn.disabled = true;
       if (askVideoSpinner) askVideoSpinner.classList.remove('hidden');
       if (askVideoBtnText) askVideoBtnText.textContent = "Loading...";
@@ -572,6 +586,7 @@ document.addEventListener('DOMContentLoaded', function () {
         console.error("Ask Video Init Error:", err);
         showStatus(err.message || "Failed to load video captions.", "error");
       } finally {
+        isGeneratingNotes = false;
         askVideoDirectBtn.disabled = false;
         if (askVideoSpinner) askVideoSpinner.classList.add('hidden');
         if (askVideoBtnText) askVideoBtnText.textContent = "Ask Video";
@@ -598,6 +613,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       currentVideoId = videoId;
+      isGeneratingNotes = true;
       fetchTranscriptOnlyBtn.disabled = true;
       if (transcriptSpinner) transcriptSpinner.classList.remove('hidden');
       if (transcriptBtnText) transcriptBtnText.textContent = "Loading...";
@@ -632,6 +648,7 @@ document.addEventListener('DOMContentLoaded', function () {
         console.error("Transcript Fetch Error:", err);
         showStatus(err.message || "Failed to fetch transcript. Captions may be disabled.", "error");
       } finally {
+        isGeneratingNotes = false;
         fetchTranscriptOnlyBtn.disabled = false;
         if (transcriptSpinner) transcriptSpinner.classList.add('hidden');
         if (transcriptBtnText) transcriptBtnText.textContent = "Transcript";
@@ -694,32 +711,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (vid) {
         await removeSavedVideoData(vid);
       }
-      currentVideoId = '';
-      currentVideoTitle = '';
-      currentNotes = '';
-      currentTranscript = '';
-      currentFormattedTranscript = '';
-      currentTranscriptBlocks = [];
-      currentTranscriptLang = '';
-      if (customPromptInput) {
-        customPromptInput.value = '';
-        updatePromptUIState();
-        collapsePromptInput();
-      }
-      if (customPromptSection) {
-        customPromptSection.classList.remove('hidden');
-      }
-      chatHistory = [];
-      notesContent.innerHTML = '';
-      transcriptContent.innerHTML = '';
-      notesWordCount.textContent = '0 words';
-      transcriptWordCount.textContent = '0 words';
-      if (transcriptLangBadge) {
-        transcriptLangBadge.textContent = '';
-        transcriptLangBadge.classList.add('hidden');
-      }
-      resetChatMessages();
-      setContentActive(false);
+      resetVideoUI('', '');
       showStatus("Cleared saved data for this video.", "info");
       setTimeout(hideStatus, 2500);
     });
@@ -1221,8 +1213,13 @@ document.addEventListener('DOMContentLoaded', function () {
       showStatus("⚡ Restored saved video from memory!", "success");
       setTimeout(hideStatus, 2500);
       return true;
+    } else {
+      // If switching to a different video that has no saved notes, clean the workspace
+      if (videoId !== currentVideoId) {
+        resetVideoUI(videoId, '');
+      }
+      return false;
     }
-    return false;
   }
 
   // ---------------- Helper Functions ---------------- //
@@ -1266,6 +1263,7 @@ document.addEventListener('DOMContentLoaded', function () {
               }
 
               if (!restored) {
+                resetVideoUI(vid, title);
                 showStatus("Detected YouTube video. Ready to generate!", "success");
                 setTimeout(hideStatus, 2500);
               }
@@ -1283,7 +1281,8 @@ document.addEventListener('DOMContentLoaded', function () {
   // Multi-tiered video title resolver: Active Tab -> Tab Injected DOM -> YouTube oEmbed API
   async function ensureVideoTitle(videoId) {
     if (!videoId) return '';
-    if (currentVideoTitle && currentVideoTitle.trim() && currentVideoTitle.trim().toLowerCase() !== 'youtube') {
+    // Only return cached title if it belongs to the EXACT same videoId!
+    if (currentVideoId === videoId && currentVideoTitle && currentVideoTitle.trim() && currentVideoTitle.trim().toLowerCase() !== 'youtube') {
       return currentVideoTitle;
     }
 
@@ -1549,6 +1548,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // UI state management
   function setLoadingState(isLoading, message = "") {
+    isGeneratingNotes = Boolean(isLoading);
     if (isLoading) {
       generateBtn.disabled = true;
       btnSpinner.classList.remove('hidden');
