@@ -71,7 +71,8 @@ document.addEventListener('DOMContentLoaded', function () {
   const transcriptBtnText = document.getElementById('transcriptBtnText');
   const transcriptSpinner = document.getElementById('transcriptSpinner');
 
-  // Toolbar Regenerate Button
+  // Notes Toolbar Elements
+  const notesToolbar = document.getElementById('notesToolbar');
   const regenerateBtn = document.getElementById('regenerateBtn');
   const regenerateBtnText = document.getElementById('regenerateBtnText');
 
@@ -237,6 +238,7 @@ document.addEventListener('DOMContentLoaded', function () {
       notesView.classList.add('hidden');
       emptyState.classList.remove('hidden');
     }
+    displayNotes();
   }
 
   function updateGenerateButtonText() {
@@ -247,7 +249,14 @@ document.addEventListener('DOMContentLoaded', function () {
   function displayNotes() {
     updateGenerateButtonText();
 
-    if (currentNotes && currentNotes.trim().length > 0) {
+    const hasNotes = Boolean(currentNotes && currentNotes.trim().length > 0);
+
+    // Toggle notes toolbar visibility (Word count, Regenerate, Copy, Export)
+    if (notesToolbar) {
+      notesToolbar.classList.toggle('hidden', !hasNotes);
+    }
+
+    if (hasNotes) {
       renderNotes(currentNotes);
     } else {
       notesWordCount.textContent = "0 words";
@@ -301,6 +310,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const transcriptData = await fetchTranscript(videoId);
         renderTranscript(transcriptData);
       }
+
+      // Ensure real video title is resolved
+      await ensureVideoTitle(videoId);
 
       // Step B: Send timestamped transcript to AI note generator
       const customPrompt = customPromptInput ? customPromptInput.value.trim() : '';
@@ -379,6 +391,7 @@ document.addEventListener('DOMContentLoaded', function () {
       try {
         const transcriptData = await fetchTranscript(videoId);
         renderTranscript(transcriptData);
+        await ensureVideoTitle(videoId);
         displayNotes();
 
         // Save state
@@ -439,6 +452,7 @@ document.addEventListener('DOMContentLoaded', function () {
       try {
         const transcriptData = await fetchTranscript(videoId);
         renderTranscript(transcriptData);
+        await ensureVideoTitle(videoId);
         displayNotes();
 
         // Save to storage so it persists
@@ -495,6 +509,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Context-Aware Custom Focus: Only show on Notes tab; completely hide on Chat & Transcript!
     if (customPromptSection) {
       customPromptSection.classList.toggle('hidden', tab !== 'notes');
+    }
+
+    if (tab === 'notes') {
+      displayNotes();
     }
 
     if (tab === 'chat') {
@@ -595,6 +613,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const transcriptData = await fetchTranscript(videoId);
         renderTranscript(transcriptData);
       }
+
+      await ensureVideoTitle(videoId);
 
       const customPrompt = customPromptInput ? customPromptInput.value.trim() : '';
       showStatus("Synthesizing comprehensive notes with Gemini AI...", "info");
@@ -790,21 +810,27 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  downloadTranscriptBtn.addEventListener('click', function () {
+  downloadTranscriptBtn.addEventListener('click', async function () {
     const textToDownload = currentFormattedTranscript || currentTranscript;
     if (!textToDownload) return;
-    const cleanSlug = (currentVideoTitle || currentVideoId || 'video')
+
+    if (!currentVideoTitle && currentVideoId) {
+      await ensureVideoTitle(currentVideoId);
+    }
+
+    const displayTitle = currentVideoTitle || (currentVideoId ? `Video ${currentVideoId}` : 'Transcript');
+    const cleanSlug = displayTitle
       .replace(/[^\w\s-]/gi, '')
       .trim()
       .replace(/\s+/g, ' ');
     const filename = `TubeNotes - ${cleanSlug} (Transcript).txt`;
     
-    let fileContent = '';
-    if (currentVideoTitle) {
-      fileContent += `# 🎬 ${currentVideoTitle} - Transcript\n`;
-      fileContent += `YouTube: ${urlInput.value.trim()}\n`;
-      fileContent += `Date: ${new Date().toLocaleDateString()}\n\n---\n\n`;
+    const rawUrl = urlInput.value.trim() || (currentVideoId ? `https://www.youtube.com/watch?v=${currentVideoId}` : '');
+    let fileContent = `# 🎬 ${displayTitle} - Transcript\n`;
+    if (rawUrl) {
+      fileContent += `YouTube: ${rawUrl}\n`;
     }
+    fileContent += `Date: ${new Date().toLocaleDateString()}\n---\n\n`;
     fileContent += textToDownload;
 
     const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8;' });
@@ -888,25 +914,30 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  downloadBtn.addEventListener('click', function () {
+  downloadBtn.addEventListener('click', async function () {
     if (!currentNotes) {
       showStatus("Generate notes first.", "error");
       setTimeout(hideStatus, 2000);
       return;
     }
 
-    const cleanSlug = (currentVideoTitle || currentVideoId || 'notes')
+    if (!currentVideoTitle && currentVideoId) {
+      await ensureVideoTitle(currentVideoId);
+    }
+
+    const displayTitle = currentVideoTitle || (currentVideoId ? `Video ${currentVideoId}` : 'Notes');
+    const cleanSlug = displayTitle
       .replace(/[^\w\s-]/gi, '')
       .trim()
       .replace(/\s+/g, ' ');
     const filename = `TubeNotes - ${cleanSlug}.txt`;
 
-    let fileContent = '';
-    if (currentVideoTitle) {
-      fileContent += `# 🎬 ${currentVideoTitle}\n`;
-      fileContent += `YouTube: ${urlInput.value.trim()}\n`;
-      fileContent += `Date: ${new Date().toLocaleDateString()}\n\n---\n\n`;
+    const rawUrl = urlInput.value.trim() || (currentVideoId ? `https://www.youtube.com/watch?v=${currentVideoId}` : '');
+    let fileContent = `# 🎬 ${displayTitle}\n`;
+    if (rawUrl) {
+      fileContent += `YouTube: ${rawUrl}\n`;
     }
+    fileContent += `Date: ${new Date().toLocaleDateString()}\n---\n\n`;
     fileContent += currentNotes;
 
     const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8;' });
@@ -985,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const saved = await getSavedVideoData(videoId);
     if (saved && (saved.summaryNotes || saved.detailedNotes || saved.notes || saved.transcript)) {
       currentVideoId = videoId;
-      currentVideoTitle = saved.title || '';
+      currentVideoTitle = saved.title || currentVideoTitle || '';
       currentTranscript = saved.transcript || '';
       currentFormattedTranscript = saved.formattedTranscript || saved.transcript || '';
       currentTranscriptBlocks = saved.transcriptBlocks || [];
@@ -1053,16 +1084,29 @@ document.addEventListener('DOMContentLoaded', function () {
             urlInput.value = tabUrl;
             toggleClearButton();
 
-            // Capture clean video title
-            if (tabs[0].title) {
-              currentVideoTitle = tabs[0].title
-                .replace(/^\(\d+\)\s*/, '')
-                .replace(/\s*-\s*YouTube$/, '')
-                .trim();
+            // Try restoring existing notes & chat first
+            const restored = await checkAndRestoreSavedVideo(vid);
+
+            // Ensure video title is fully resolved (from tab, DOM scripting, or oEmbed)
+            const title = await ensureVideoTitle(vid);
+
+            // If notes existed without title, update storage
+            if (restored && title && currentNotes) {
+              await saveVideoData(vid, {
+                videoId: vid,
+                url: tabUrl,
+                title: title,
+                notes: currentNotes,
+                customPrompt: customPromptInput ? customPromptInput.value.trim() : '',
+                transcript: currentTranscript,
+                formattedTranscript: currentFormattedTranscript,
+                transcriptBlocks: currentTranscriptBlocks,
+                transcriptLang: currentTranscriptLang,
+                chatHistory: chatHistory,
+                savedAt: Date.now()
+              });
             }
 
-            // Try restoring existing notes & chat
-            const restored = await checkAndRestoreSavedVideo(vid);
             if (!restored) {
               showStatus("Detected YouTube video. Ready to generate!", "success");
               setTimeout(hideStatus, 2500);
@@ -1075,6 +1119,79 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       });
     }
+  }
+
+  // Multi-tiered video title resolver: Active Tab -> Tab Injected DOM -> YouTube oEmbed API
+  async function ensureVideoTitle(videoId) {
+    if (!videoId) return '';
+    if (currentVideoTitle && currentVideoTitle.trim() && currentVideoTitle.trim().toLowerCase() !== 'youtube') {
+      return currentVideoTitle;
+    }
+
+    // 1. Try Chrome Tabs query & active tab title
+    if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
+      try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tabs && tabs[0]) {
+          const tab = tabs[0];
+          if (tab.url && tab.url.includes(videoId)) {
+            if (tab.title) {
+              const cleanTabTitle = tab.title
+                .replace(/^\(\d+\)\s*/, '')
+                .replace(/\s*-\s*YouTube$/, '')
+                .trim();
+              if (cleanTabTitle && cleanTabTitle.toLowerCase() !== 'youtube') {
+                currentVideoTitle = cleanTabTitle;
+                return currentVideoTitle;
+              }
+            }
+
+            // 1B. If tab title was just "YouTube", query page DOM directly via chrome.scripting
+            if (chrome.scripting && chrome.scripting.executeScript && tab.id) {
+              try {
+                const results = await chrome.scripting.executeScript({
+                  target: { tabId: tab.id },
+                  func: () => {
+                    const el = document.querySelector('h1.ytd-watch-metadata yt-formatted-string') ||
+                               document.querySelector('#title h1') ||
+                               document.querySelector('meta[property="og:title"]');
+                    return el ? (el.content || el.textContent || '').trim() : '';
+                  }
+                });
+                if (results && results[0] && results[0].result) {
+                  const domTitle = results[0].result.trim();
+                  if (domTitle && domTitle.toLowerCase() !== 'youtube') {
+                    currentVideoTitle = domTitle;
+                    return currentVideoTitle;
+                  }
+                }
+              } catch (scriptErr) {
+                // Scripting fallback silent ignore
+              }
+            }
+          }
+        }
+      } catch (tabErr) {
+        console.warn("Tab title check:", tabErr);
+      }
+    }
+
+    // 2. Fetch directly from YouTube official oEmbed API (100% reliable, zero-auth, fast)
+    try {
+      const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+      const resp = await fetch(oembedUrl);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data && data.title) {
+          currentVideoTitle = data.title.trim();
+          return currentVideoTitle;
+        }
+      }
+    } catch (oembedErr) {
+      console.warn("oEmbed title fetch:", oembedErr);
+    }
+
+    return currentVideoTitle || '';
   }
 
   // Extract YouTube ID
@@ -1328,6 +1445,9 @@ document.addEventListener('DOMContentLoaded', function () {
     let blocks = [];
 
     if (data && typeof data === 'object' && !Array.isArray(data)) {
+      if (data.title && (!currentVideoTitle || currentVideoTitle.toLowerCase() === 'youtube')) {
+        currentVideoTitle = data.title;
+      }
       text = data.text || '';
       currentTranscript = text;
       currentFormattedTranscript = data.formattedText || text;

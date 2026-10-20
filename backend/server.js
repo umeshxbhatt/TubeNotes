@@ -259,6 +259,7 @@ app.get('/transcript', async (req, res) => {
     let rawSegments = [];
     let detectedLang = 'en';
     let trackLabel = '';
+    let videoTitle = '';
 
     try {
       const playerResp = await fetch(INNERTUBE_API_URL, {
@@ -275,6 +276,10 @@ app.get('/transcript', async (req, res) => {
 
       if (playerResp.ok) {
         const playerData = await playerResp.json();
+        if (playerData?.videoDetails?.title) {
+          videoTitle = playerData.videoDetails.title;
+        }
+
         const captionsRenderer = playerData?.captions?.playerCaptionsTracklistRenderer;
         const captionTracks = captionsRenderer?.captionTracks;
 
@@ -315,6 +320,20 @@ app.get('/transcript', async (req, res) => {
       }
     }
 
+    if (!videoTitle) {
+      try {
+        const oembedResp = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+        if (oembedResp.ok) {
+          const oembedData = await oembedResp.json();
+          if (oembedData && oembedData.title) {
+            videoTitle = oembedData.title;
+          }
+        }
+      } catch (oeErr) {
+        // Silent fallback
+      }
+    }
+
     if (!rawSegments || rawSegments.length === 0) {
       throw new Error("No caption text found for this video.");
     }
@@ -327,7 +346,8 @@ app.get('/transcript', async (req, res) => {
       formattedText: formattedText,
       blocks: blocks,
       language: detectedLang,
-      languageLabel: trackLabel || detectedLang
+      languageLabel: trackLabel || detectedLang,
+      title: videoTitle || ''
     });
   } catch (error) {
     console.error(`Error fetching transcript:`, error.message);
