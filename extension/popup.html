@@ -77,7 +77,7 @@
         </div>
 
         <!-- Action Buttons Group: Generate Notes (Primary) + Ask Video + Transcript -->
-        <div class="action-buttons-group">
+        <div id="actionButtonsGroup" class="action-buttons-group">
           <!-- 1. Primary: Generate Notes -->
           <button id="generateBtn" class="action-btn primary-btn" title="Generate comprehensive AI study notes with timestamps (Press Enter)">
             <span class="btn-glow"></span>
@@ -198,6 +198,13 @@
                 <span id="notesWordCount" class="meta-tag">0 words</span>
               </div>
               <div class="toolbar-actions">
+                <button id="regenerateBtn" class="tool-btn regen-tool-btn" title="Re-synthesize study notes (click again to confirm)">
+                  <svg class="tool-icon regen-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                  <span id="regenerateBtnText">Regenerate</span>
+                </button>
                 <button id="copyBtn" class="tool-btn" title="Copy notes to clipboard">
                   <svg class="tool-icon default-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -233,6 +240,22 @@
                   I'm ready! Ask me anything about this video (e.g. explain a concept, give code examples, or test your understanding).
                 </div>
               </div>
+            </div>
+
+            <!-- Interactive Starter Prompts (Clickable chips) -->
+            <div id="chatSuggestions" class="chat-suggestions">
+              <button type="button" class="suggestion-chip" data-query="Can you summarize this video in 3 key takeaways?">
+                <span class="chip-emoji">💡</span>
+                <span>3 Takeaways</span>
+              </button>
+              <button type="button" class="suggestion-chip" data-query="What is the core argument or thesis of this video?">
+                <span class="chip-emoji">🎯</span>
+                <span>Core Thesis</span>
+              </button>
+              <button type="button" class="suggestion-chip" data-query="Explain the most important technical concepts mentioned.">
+                <span class="chip-emoji">🧠</span>
+                <span>Key Concepts</span>
+              </button>
             </div>
 
             <!-- Chat Input Bar -->

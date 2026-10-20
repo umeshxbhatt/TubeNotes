@@ -58,6 +58,9 @@ document.addEventListener('DOMContentLoaded', function () {
   const customPromptInput = document.getElementById('customPromptInput');
   const clearPromptBtn = document.getElementById('clearPromptBtn');
 
+  // Top Action Buttons Group
+  const actionButtonsGroup = document.getElementById('actionButtonsGroup');
+
   // Direct Ask Video Action Button
   const askVideoDirectBtn = document.getElementById('askVideoDirectBtn');
   const askVideoBtnText = document.getElementById('askVideoBtnText');
@@ -68,9 +71,17 @@ document.addEventListener('DOMContentLoaded', function () {
   const transcriptBtnText = document.getElementById('transcriptBtnText');
   const transcriptSpinner = document.getElementById('transcriptSpinner');
 
-  // State Management - Master Notes, Transcript, and Chat
+  // Toolbar Regenerate Button
+  const regenerateBtn = document.getElementById('regenerateBtn');
+  const regenerateBtnText = document.getElementById('regenerateBtnText');
+
+  // Chat Suggestion Chips
+  const chatSuggestions = document.getElementById('chatSuggestions');
+
+  // State Management - Master Notes, Video Title, Transcript, and Chat
   let currentNotes = '';         // Comprehensive Master Notes
   let currentVideoId = '';
+  let currentVideoTitle = '';    // Real YouTube video title
   let currentTranscript = '';
   let currentFormattedTranscript = ''; // Text with [00:00] timestamps for copy & export
   let currentTranscriptBlocks = [];     // Structured array for UI badges
@@ -167,10 +178,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  // Keyboard shortcut: Press Enter to trigger note generation
+  // Keyboard shortcut: Press Enter in URL bar
   urlInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') {
       e.preventDefault();
+      const vid = extractVideoId(urlInput.value.trim());
+      // SAFEGUARD: If notes already exist for this video, switch to notes view rather than re-generating!
+      if (vid && vid === currentVideoId && currentNotes) {
+        setContentActive(true);
+        switchTab('notes');
+        return;
+      }
       generateBtn.click();
     }
   });
@@ -179,12 +197,16 @@ document.addEventListener('DOMContentLoaded', function () {
     customPromptInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        generateBtn.click();
+        if (currentNotes) {
+          executeRegenerateNotes();
+        } else {
+          generateBtn.click();
+        }
       }
     });
   }
 
-  // Global Enter shortcut when popup is opened (as long as focus is not inside the Chat input or another button)
+  // Global Enter shortcut when popup is opened
   window.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
       const activeEl = document.activeElement;
@@ -193,10 +215,29 @@ document.addEventListener('DOMContentLoaded', function () {
       // If already focused on an interactive button or link, let native click trigger
       if (activeEl && (activeEl.tagName === 'BUTTON' || activeEl.tagName === 'A')) return;
       
+      // SAFEGUARD: If notes already exist for this video, do NOT auto-generate on accidental Enter!
+      if (currentNotes && currentNotes.trim().length > 0) {
+        return;
+      }
+
       e.preventDefault();
       generateBtn.click();
     }
   });
+
+  // Controls visibility between initial launch actions and active content view
+  function setContentActive(isActive) {
+    if (actionButtonsGroup) {
+      actionButtonsGroup.classList.toggle('hidden', isActive);
+    }
+    if (isActive) {
+      emptyState.classList.add('hidden');
+      notesView.classList.remove('hidden');
+    } else {
+      notesView.classList.add('hidden');
+      emptyState.classList.remove('hidden');
+    }
+  }
 
   function updateGenerateButtonText() {
     if (btnText) btnText.textContent = "Generate Notes";
@@ -278,6 +319,7 @@ document.addEventListener('DOMContentLoaded', function () {
       await saveVideoData(videoId, {
         videoId: videoId,
         url: rawUrl,
+        title: currentVideoTitle,
         notes: currentNotes,
         customPrompt: customPrompt,
         transcript: currentTranscript,
@@ -289,8 +331,7 @@ document.addEventListener('DOMContentLoaded', function () {
       });
 
       showStatus("Master notes ready & saved!", "success");
-      emptyState.classList.add('hidden');
-      notesView.classList.remove('hidden');
+      setContentActive(true);
       switchTab('notes');
 
       setTimeout(() => {
@@ -302,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function () {
       showStatus(err.message || "Failed to generate notes. Check backend.", "error");
       skeletonLoader.classList.add('hidden');
       if (!currentNotes && !currentTranscript) {
-        emptyState.classList.remove('hidden');
+        setContentActive(false);
       }
     } finally {
       setLoadingState(false);
@@ -324,8 +365,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // If transcript already loaded for this video, immediately jump into chat!
       if (currentTranscript && currentVideoId === videoId) {
-        emptyState.classList.add('hidden');
-        notesView.classList.remove('hidden');
+        setContentActive(true);
         switchTab('chat');
         chatInput.focus();
         return;
@@ -345,6 +385,7 @@ document.addEventListener('DOMContentLoaded', function () {
         await saveVideoData(videoId, {
           videoId: videoId,
           url: rawUrl,
+          title: currentVideoTitle,
           notes: currentNotes,
           transcript: currentTranscript,
           formattedTranscript: currentFormattedTranscript,
@@ -354,8 +395,7 @@ document.addEventListener('DOMContentLoaded', function () {
           savedAt: Date.now()
         });
 
-        emptyState.classList.add('hidden');
-        notesView.classList.remove('hidden');
+        setContentActive(true);
         switchTab('chat');
         chatInput.focus();
         showStatus("Ready! Ask anything about this video.", "success");
@@ -385,8 +425,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // If already fetched for this video, immediately switch to transcript tab without re-fetching!
       if (currentTranscript && currentVideoId === videoId) {
-        emptyState.classList.add('hidden');
-        notesView.classList.remove('hidden');
+        setContentActive(true);
         switchTab('transcript');
         return;
       }
@@ -406,6 +445,7 @@ document.addEventListener('DOMContentLoaded', function () {
         await saveVideoData(videoId, {
           videoId: videoId,
           url: rawUrl,
+          title: currentVideoTitle,
           notes: currentNotes,
           transcript: currentTranscript,
           formattedTranscript: currentFormattedTranscript,
@@ -415,8 +455,7 @@ document.addEventListener('DOMContentLoaded', function () {
           savedAt: Date.now()
         });
 
-        emptyState.classList.add('hidden');
-        notesView.classList.remove('hidden');
+        setContentActive(true);
         switchTab('transcript');
         showStatus("Transcript loaded with timestamps!", "success");
         setTimeout(hideStatus, 2500);
@@ -484,6 +523,7 @@ document.addEventListener('DOMContentLoaded', function () {
         await removeSavedVideoData(vid);
       }
       currentVideoId = '';
+      currentVideoTitle = '';
       currentNotes = '';
       currentTranscript = '';
       currentFormattedTranscript = '';
@@ -507,12 +547,102 @@ document.addEventListener('DOMContentLoaded', function () {
         transcriptLangBadge.classList.add('hidden');
       }
       resetChatMessages();
-      notesView.classList.add('hidden');
-      emptyState.classList.remove('hidden');
+      setContentActive(false);
       showStatus("Cleared saved data for this video.", "info");
       setTimeout(hideStatus, 2500);
     });
   }
+
+  // 8. Toolbar Regenerate Button with 2-click Confirmation
+  let regenConfirmTimer = null;
+
+  if (regenerateBtn) {
+    regenerateBtn.addEventListener('click', async function () {
+      if (regenerateBtn.classList.contains('confirm-state')) {
+        clearTimeout(regenConfirmTimer);
+        resetRegenBtnState();
+        await executeRegenerateNotes();
+      } else {
+        regenerateBtn.classList.add('confirm-state');
+        if (regenerateBtnText) regenerateBtnText.textContent = "Confirm?";
+        regenConfirmTimer = setTimeout(resetRegenBtnState, 3500);
+      }
+    });
+  }
+
+  function resetRegenBtnState() {
+    if (!regenerateBtn) return;
+    regenerateBtn.classList.remove('confirm-state');
+    if (regenerateBtnText) regenerateBtnText.textContent = "Regenerate";
+  }
+
+  async function executeRegenerateNotes() {
+    const rawUrl = urlInput.value.trim();
+    const videoId = currentVideoId || extractVideoId(rawUrl);
+
+    if (!videoId) {
+      showStatus("Please enter a valid YouTube video link.", "error");
+      return;
+    }
+
+    currentVideoId = videoId;
+    if (regenerateBtn) regenerateBtn.classList.add('spinning');
+    setLoadingState(true, "Re-synthesizing notes with latest focus...");
+
+    try {
+      if (!currentTranscript) {
+        showStatus("Extracting video captions...", "info");
+        const transcriptData = await fetchTranscript(videoId);
+        renderTranscript(transcriptData);
+      }
+
+      const customPrompt = customPromptInput ? customPromptInput.value.trim() : '';
+      showStatus("Synthesizing comprehensive notes with Gemini AI...", "info");
+
+      const transcriptToSend = currentFormattedTranscript || currentTranscript;
+      const generatedNotes = await generateAINotes(transcriptToSend, 'notes', customPrompt);
+
+      currentNotes = generatedNotes;
+      displayNotes();
+
+      await saveVideoData(videoId, {
+        videoId: videoId,
+        url: rawUrl,
+        title: currentVideoTitle,
+        notes: currentNotes,
+        customPrompt: customPrompt,
+        transcript: currentTranscript,
+        formattedTranscript: currentFormattedTranscript,
+        transcriptBlocks: currentTranscriptBlocks,
+        transcriptLang: currentTranscriptLang,
+        chatHistory: chatHistory,
+        savedAt: Date.now()
+      });
+
+      showStatus("Master notes re-synthesized!", "success");
+      setContentActive(true);
+      switchTab('notes');
+      setTimeout(hideStatus, 3000);
+    } catch (err) {
+      console.error("Regenerate Error:", err);
+      showStatus(err.message || "Failed to regenerate notes.", "error");
+    } finally {
+      if (regenerateBtn) regenerateBtn.classList.remove('spinning');
+      setLoadingState(false);
+    }
+  }
+
+  // 9. Interactive Starter Prompts (Clickable chips in Ask Video)
+  const suggestionChips = document.querySelectorAll('.suggestion-chip');
+  suggestionChips.forEach(chip => {
+    chip.addEventListener('click', function () {
+      const query = chip.dataset.query;
+      if (query && chatInput) {
+        chatInput.value = query;
+        handleChatSubmit();
+      }
+    });
+  });
 
   // 8. Conversational Chat Logic
   sendChatBtn.addEventListener('click', handleChatSubmit);
@@ -575,6 +705,7 @@ document.addEventListener('DOMContentLoaded', function () {
         await saveVideoData(currentVideoId, {
           videoId: currentVideoId,
           url: urlInput.value.trim(),
+          title: currentVideoTitle,
           notes: currentNotes,
           transcript: currentTranscript,
           formattedTranscript: currentFormattedTranscript,
@@ -662,8 +793,21 @@ document.addEventListener('DOMContentLoaded', function () {
   downloadTranscriptBtn.addEventListener('click', function () {
     const textToDownload = currentFormattedTranscript || currentTranscript;
     if (!textToDownload) return;
-    const filename = `TubeNotes_Transcript_${currentVideoId || 'video'}.txt`;
-    const blob = new Blob([textToDownload], { type: 'text/plain;charset=utf-8;' });
+    const cleanSlug = (currentVideoTitle || currentVideoId || 'video')
+      .replace(/[^\w\s-]/gi, '')
+      .trim()
+      .replace(/\s+/g, ' ');
+    const filename = `TubeNotes - ${cleanSlug} (Transcript).txt`;
+    
+    let fileContent = '';
+    if (currentVideoTitle) {
+      fileContent += `# 🎬 ${currentVideoTitle} - Transcript\n`;
+      fileContent += `YouTube: ${urlInput.value.trim()}\n`;
+      fileContent += `Date: ${new Date().toLocaleDateString()}\n\n---\n\n`;
+    }
+    fileContent += textToDownload;
+
+    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -751,8 +895,21 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
-    const filename = `TubeNotes_${currentVideoId || 'video'}_notes.txt`;
-    const blob = new Blob([currentNotes], { type: 'text/plain;charset=utf-8;' });
+    const cleanSlug = (currentVideoTitle || currentVideoId || 'notes')
+      .replace(/[^\w\s-]/gi, '')
+      .trim()
+      .replace(/\s+/g, ' ');
+    const filename = `TubeNotes - ${cleanSlug}.txt`;
+
+    let fileContent = '';
+    if (currentVideoTitle) {
+      fileContent += `# 🎬 ${currentVideoTitle}\n`;
+      fileContent += `YouTube: ${urlInput.value.trim()}\n`;
+      fileContent += `Date: ${new Date().toLocaleDateString()}\n\n---\n\n`;
+    }
+    fileContent += currentNotes;
+
+    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -828,6 +985,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const saved = await getSavedVideoData(videoId);
     if (saved && (saved.summaryNotes || saved.detailedNotes || saved.notes || saved.transcript)) {
       currentVideoId = videoId;
+      currentVideoTitle = saved.title || '';
       currentTranscript = saved.transcript || '';
       currentFormattedTranscript = saved.formattedTranscript || saved.transcript || '';
       currentTranscriptBlocks = saved.transcriptBlocks || [];
@@ -873,8 +1031,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
       }
 
-      emptyState.classList.add('hidden');
-      notesView.classList.remove('hidden');
+      setContentActive(true);
       switchTab('notes');
       showStatus("⚡ Restored saved video from memory!", "success");
       setTimeout(hideStatus, 2500);
@@ -895,6 +1052,14 @@ document.addEventListener('DOMContentLoaded', function () {
           if (vid) {
             urlInput.value = tabUrl;
             toggleClearButton();
+
+            // Capture clean video title
+            if (tabs[0].title) {
+              currentVideoTitle = tabs[0].title
+                .replace(/^\(\d+\)\s*/, '')
+                .replace(/\s*-\s*YouTube$/, '')
+                .trim();
+            }
 
             // Try restoring existing notes & chat
             const restored = await checkAndRestoreSavedVideo(vid);
