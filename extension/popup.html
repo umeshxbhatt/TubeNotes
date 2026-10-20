@@ -21,17 +21,48 @@
           <span class="version-tag">AI v1.0</span>
         </div>
       </div>
-      <button id="detectTabBtn" class="pill-btn secondary" title="Detect link from current YouTube tab">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-        </svg>
-        <span>Current Tab</span>
-      </button>
+      <div class="header-actions">
+        <button id="detectTabBtn" class="pill-btn secondary" title="Detect link from current YouTube tab">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+          <span>Current Tab</span>
+        </button>
+        <button id="openSidePanelBtn" class="pill-btn secondary sidepanel-btn" title="Dock TubeNotes into Chrome Side Panel (keeps notes open side-by-side while watching)">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="3" ry="3"/>
+            <line x1="15" y1="3" x2="15" y2="21"/>
+          </svg>
+          <span class="sidepanel-btn-label">Side Panel</span>
+        </button>
+        <span id="sidePanelBadge" class="sidepanel-active-badge hidden" title="Docked in Chrome Side Panel">
+          <span class="pulse-dot"></span>
+          <span>Docked</span>
+        </span>
+      </div>
     </header>
 
     <!-- Main Content -->
     <main class="main-body">
+      <!-- Active Tab Change Notification Banner (Side Panel) -->
+      <div id="tabSwitchBanner" class="tab-switch-banner hidden">
+        <div class="banner-content">
+          <svg class="banner-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/>
+          </svg>
+          <span id="tabSwitchText" class="tab-switch-text">New YouTube video detected in active tab</span>
+        </div>
+        <div class="banner-actions">
+          <button id="switchVideoBtn" class="banner-action-btn" title="Load this video in TubeNotes">Load Video</button>
+          <button id="dismissSwitchBtn" class="banner-close-btn" title="Dismiss notification">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      </div>
       <!-- Input Card -->
       <div class="input-card">
         <div class="input-wrapper">

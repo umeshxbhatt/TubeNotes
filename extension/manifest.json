@@ -10,11 +10,20 @@
     "storage",
     "downloads",
     "activeTab",
+    "tabs",
     "scripting",
+    "sidePanel",
+    "contextMenus",
     "clipboardWrite",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
   "host_permissions": [
     "*://*.youtube.com/*"
   ],

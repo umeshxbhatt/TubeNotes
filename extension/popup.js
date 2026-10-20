@@ -79,6 +79,14 @@ document.addEventListener('DOMContentLoaded', function () {
   // Chat Suggestion Chips
   const chatSuggestions = document.getElementById('chatSuggestions');
 
+  // Side Panel Elements & Tab Change Banner
+  const openSidePanelBtn = document.getElementById('openSidePanelBtn');
+  const sidePanelBadge = document.getElementById('sidePanelBadge');
+  const tabSwitchBanner = document.getElementById('tabSwitchBanner');
+  const tabSwitchText = document.getElementById('tabSwitchText');
+  const switchVideoBtn = document.getElementById('switchVideoBtn');
+  const dismissSwitchBtn = document.getElementById('dismissSwitchBtn');
+
   // State Management - Master Notes, Video Title, Transcript, and Chat
   let currentNotes = '';         // Comprehensive Master Notes
   let currentVideoId = '';
@@ -89,7 +97,153 @@ document.addEventListener('DOMContentLoaded', function () {
   let currentTranscriptLang = '';       // Detected original language label
   let chatHistory = [];                 // Unified chat history for the video
 
-  // 1. Auto-detect active YouTube tab on popup launch
+  // Side Panel State
+  let isSidePanel = false;
+  let currentTabId = null;
+  let currentWindowId = null;
+  let pendingSwitchUrl = '';
+  let pendingSwitchTitle = '';
+
+  // Proactively capture current window ID to eliminate async delays on click
+  if (typeof chrome !== 'undefined' && chrome.windows && chrome.windows.getCurrent) {
+    chrome.windows.getCurrent(function (win) {
+      if (win && win.id) currentWindowId = win.id;
+    });
+  }
+
+  // Detect whether running in Chrome Popup or Side Panel
+  function initSidePanelMode() {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.extension && chrome.extension.getViews) {
+        const popupViews = chrome.extension.getViews({ type: 'popup' });
+        // If current window is NOT in popup views list, it is running in the side panel
+        isSidePanel = !popupViews.includes(window);
+      }
+    } catch (e) {
+      isSidePanel = window.innerHeight > 620;
+    }
+
+    if (isSidePanel) {
+      document.body.classList.add('is-sidepanel');
+      document.documentElement.classList.add('is-sidepanel');
+      if (openSidePanelBtn) openSidePanelBtn.classList.add('hidden');
+      if (sidePanelBadge) sidePanelBadge.classList.remove('hidden');
+    } else {
+      document.body.classList.add('is-popup');
+      document.documentElement.classList.add('is-popup');
+      if (openSidePanelBtn) openSidePanelBtn.classList.remove('hidden');
+      if (sidePanelBadge) sidePanelBadge.classList.add('hidden');
+    }
+  }
+
+  initSidePanelMode();
+
+  // Header Open in Side Panel button (Directly calls chrome.sidePanel.open to maintain user gesture)
+  if (openSidePanelBtn) {
+    openSidePanelBtn.addEventListener('click', async function () {
+      console.log('[TubeNotes] Clicked Side Panel button');
+
+      if (typeof chrome === 'undefined' || !chrome.sidePanel || !chrome.sidePanel.open) {
+        console.error('[TubeNotes] chrome.sidePanel API not available');
+        showStatus('Side Panel API not available. Please reload extension in chrome://extensions', 'error');
+        alert('Side Panel API not detected. Please go to chrome://extensions and click the Reload (🔄) icon on TubeNotes.');
+        return;
+      }
+
+      try {
+        // Step 1: Open side panel using stored windowId immediately (preserves user gesture synchronously)
+        let targetWinId = currentWindowId;
+        if (!targetWinId && chrome.windows && chrome.windows.getCurrent) {
+          const win = await chrome.windows.getCurrent();
+          targetWinId = win ? win.id : undefined;
+        }
+
+        if (targetWinId) {
+          console.log('[TubeNotes] Opening side panel for window:', targetWinId);
+          await chrome.sidePanel.open({ windowId: targetWinId });
+          window.close();
+          return;
+        }
+
+        // Step 2: Fallback with tabId
+        let targetTabId = currentTabId;
+        if (!targetTabId && chrome.tabs && chrome.tabs.query) {
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (tab) targetTabId = tab.id;
+        }
+
+        if (targetTabId) {
+          console.log('[TubeNotes] Opening side panel for tab:', targetTabId);
+          await chrome.sidePanel.open({ tabId: targetTabId });
+          window.close();
+          return;
+        }
+
+        showStatus('Could not determine active window ID', 'error');
+      } catch (err) {
+        console.error('[TubeNotes] Direct sidePanel.open failed:', err);
+        // Fallback: If direct call threw user gesture error, try via background service worker
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({ action: 'OPEN_SIDE_PANEL', windowId: currentWindowId }, function (res) {
+            if (res && res.success) {
+              window.close();
+            } else {
+              showStatus('Failed to open side panel: ' + (err.message || 'Unknown error'), 'error');
+            }
+          });
+        } else {
+          showStatus('Failed to open side panel: ' + err.message, 'error');
+        }
+      }
+    });
+  }
+
+  // Active Tab Switch Listener (for Side Panel mode)
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+    chrome.runtime.onMessage.addListener(function (message) {
+      if (message.action === 'YOUTUBE_TAB_CHANGED' && isSidePanel) {
+        const newVid = extractVideoId(message.url);
+        if (newVid && newVid !== currentVideoId) {
+          // If no content is currently active/generated, switch instantly
+          if (!currentNotes && !currentTranscript && (!chatHistory || chatHistory.length === 0)) {
+            urlInput.value = message.url;
+            toggleClearButton();
+            autoDetectCurrentTab(false);
+          } else {
+            // Content exists: show non-intrusive banner offering to load new video
+            pendingSwitchUrl = message.url;
+            pendingSwitchTitle = message.title || 'New YouTube Video';
+            if (tabSwitchBanner && tabSwitchText) {
+              const displayTitle = pendingSwitchTitle.replace(/ - YouTube$/, '').trim();
+              tabSwitchText.textContent = `New video active: "${displayTitle}"`;
+              tabSwitchBanner.classList.remove('hidden');
+            }
+          }
+        }
+      }
+    });
+  }
+
+  if (switchVideoBtn) {
+    switchVideoBtn.addEventListener('click', async function () {
+      if (pendingSwitchUrl) {
+        urlInput.value = pendingSwitchUrl;
+        toggleClearButton();
+        if (tabSwitchBanner) tabSwitchBanner.classList.add('hidden');
+        await autoDetectCurrentTab(false);
+        pendingSwitchUrl = '';
+      }
+    });
+  }
+
+  if (dismissSwitchBtn) {
+    dismissSwitchBtn.addEventListener('click', function () {
+      if (tabSwitchBanner) tabSwitchBanner.classList.add('hidden');
+      pendingSwitchUrl = '';
+    });
+  }
+
+  // 1. Auto-detect active YouTube tab on launch
   autoDetectCurrentTab();
 
   // 2. Tab detection button click
@@ -215,7 +369,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (activeEl === chatInput) return;
       // If already focused on an interactive button or link, let native click trigger
       if (activeEl && (activeEl.tagName === 'BUTTON' || activeEl.tagName === 'A')) return;
-      
+
       // SAFEGUARD: If notes already exist for this video, do NOT auto-generate on accidental Enter!
       if (currentNotes && currentNotes.trim().length > 0) {
         return;
@@ -824,7 +978,7 @@ document.addEventListener('DOMContentLoaded', function () {
       .trim()
       .replace(/\s+/g, ' ');
     const filename = `TubeNotes - ${cleanSlug} (Transcript).txt`;
-    
+
     const rawUrl = urlInput.value.trim() || (currentVideoId ? `https://www.youtube.com/watch?v=${currentVideoId}` : '');
     let fileContent = `# 🎬 ${displayTitle} - Transcript\n`;
     if (rawUrl) {
@@ -992,7 +1146,7 @@ document.addEventListener('DOMContentLoaded', function () {
       } else {
         try {
           localStorage.setItem(`tubenotes_${videoId}`, JSON.stringify(payload));
-        } catch {}
+        } catch { }
         resolve();
       }
     });
@@ -1005,7 +1159,7 @@ document.addEventListener('DOMContentLoaded', function () {
       } else {
         try {
           localStorage.removeItem(`tubenotes_${videoId}`);
-        } catch {}
+        } catch { }
         resolve();
       }
     });
@@ -1077,41 +1231,46 @@ document.addEventListener('DOMContentLoaded', function () {
   function autoDetectCurrentTab(showAlertIfNone = false) {
     if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.query) {
       chrome.tabs.query({ active: true, currentWindow: true }, async function (tabs) {
-        if (tabs && tabs.length > 0 && tabs[0].url) {
-          const tabUrl = tabs[0].url;
-          const vid = extractVideoId(tabUrl);
-          if (vid) {
-            urlInput.value = tabUrl;
-            toggleClearButton();
+        if (tabs && tabs.length > 0) {
+          if (tabs[0].id) currentTabId = tabs[0].id;
+          if (tabs[0].windowId) currentWindowId = tabs[0].windowId;
 
-            // Try restoring existing notes & chat first
-            const restored = await checkAndRestoreSavedVideo(vid);
+          if (tabs[0].url) {
+            const tabUrl = tabs[0].url;
+            const vid = extractVideoId(tabUrl);
+            if (vid) {
+              urlInput.value = tabUrl;
+              toggleClearButton();
 
-            // Ensure video title is fully resolved (from tab, DOM scripting, or oEmbed)
-            const title = await ensureVideoTitle(vid);
+              // Try restoring existing notes & chat first
+              const restored = await checkAndRestoreSavedVideo(vid);
 
-            // If notes existed without title, update storage
-            if (restored && title && currentNotes) {
-              await saveVideoData(vid, {
-                videoId: vid,
-                url: tabUrl,
-                title: title,
-                notes: currentNotes,
-                customPrompt: customPromptInput ? customPromptInput.value.trim() : '',
-                transcript: currentTranscript,
-                formattedTranscript: currentFormattedTranscript,
-                transcriptBlocks: currentTranscriptBlocks,
-                transcriptLang: currentTranscriptLang,
-                chatHistory: chatHistory,
-                savedAt: Date.now()
-              });
+              // Ensure video title is fully resolved (from tab, DOM scripting, or oEmbed)
+              const title = await ensureVideoTitle(vid);
+
+              // If notes existed without title, update storage
+              if (restored && title && currentNotes) {
+                await saveVideoData(vid, {
+                  videoId: vid,
+                  url: tabUrl,
+                  title: title,
+                  notes: currentNotes,
+                  customPrompt: customPromptInput ? customPromptInput.value.trim() : '',
+                  transcript: currentTranscript,
+                  formattedTranscript: currentFormattedTranscript,
+                  transcriptBlocks: currentTranscriptBlocks,
+                  transcriptLang: currentTranscriptLang,
+                  chatHistory: chatHistory,
+                  savedAt: Date.now()
+                });
+              }
+
+              if (!restored) {
+                showStatus("Detected YouTube video. Ready to generate!", "success");
+                setTimeout(hideStatus, 2500);
+              }
+              return;
             }
-
-            if (!restored) {
-              showStatus("Detected YouTube video. Ready to generate!", "success");
-              setTimeout(hideStatus, 2500);
-            }
-            return;
           }
         }
         if (showAlertIfNone) {
@@ -1153,8 +1312,8 @@ document.addEventListener('DOMContentLoaded', function () {
                   target: { tabId: tab.id },
                   func: () => {
                     const el = document.querySelector('h1.ytd-watch-metadata yt-formatted-string') ||
-                               document.querySelector('#title h1') ||
-                               document.querySelector('meta[property="og:title"]');
+                      document.querySelector('#title h1') ||
+                      document.querySelector('meta[property="og:title"]');
                     return el ? (el.content || el.textContent || '').trim() : '';
                   }
                 });
@@ -1259,7 +1418,7 @@ document.addEventListener('DOMContentLoaded', function () {
         video.currentTime = targetSeconds;
         const playPromise = video.play();
         if (playPromise !== undefined && typeof playPromise.catch === 'function') {
-          playPromise.catch(() => {});
+          playPromise.catch(() => { });
         }
         return { success: true, method: 'html5_video' };
       }
@@ -1419,7 +1578,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Render notes with Markdown support
   function renderNotes(markdown) {
     notesContent.innerHTML = formatMarkdown(markdown);
-    
+
     // Word count calculation
     const words = markdown.trim().split(/\s+/).filter(Boolean).length;
     notesWordCount.textContent = `${words} words`;
