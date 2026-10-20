@@ -50,7 +50,11 @@ document.addEventListener('DOMContentLoaded', function () {
   const copyCheckIcon = copyBtn.querySelector('.check-icon');
   const downloadBtn = document.getElementById('downloadBtn');
 
-  // Custom Prompt Input Elements
+  // Custom Prompt & Collapsible Accordion Elements
+  const customPromptSection = document.getElementById('customPromptSection');
+  const togglePromptBtn = document.getElementById('togglePromptBtn');
+  const promptToggleText = document.getElementById('promptToggleText');
+  const customPromptContainer = document.getElementById('customPromptContainer');
   const customPromptInput = document.getElementById('customPromptInput');
   const clearPromptBtn = document.getElementById('clearPromptBtn');
 
@@ -96,30 +100,63 @@ document.addEventListener('DOMContentLoaded', function () {
     urlInput.focus();
   });
 
-  // Custom prompt input handlers & quick tags
+  // Collapsible Custom Focus Accordion handlers
+  if (togglePromptBtn && customPromptContainer) {
+    togglePromptBtn.addEventListener('click', function () {
+      const isCollapsed = customPromptContainer.classList.contains('collapsed');
+      if (isCollapsed) {
+        expandPromptInput(true);
+      } else {
+        collapsePromptInput();
+      }
+    });
+  }
+
+  function expandPromptInput(shouldFocus = false) {
+    if (!customPromptContainer || !togglePromptBtn) return;
+    customPromptContainer.classList.remove('collapsed');
+    togglePromptBtn.classList.add('active');
+    if (shouldFocus && customPromptInput) {
+      customPromptInput.focus();
+    }
+  }
+
+  function collapsePromptInput() {
+    if (!customPromptContainer || !togglePromptBtn) return;
+    customPromptContainer.classList.add('collapsed');
+    togglePromptBtn.classList.remove('active');
+  }
+
+  function updatePromptUIState() {
+    if (!customPromptInput || !clearPromptBtn || !togglePromptBtn) return;
+    const val = customPromptInput.value.trim();
+    if (val.length > 0) {
+      clearPromptBtn.classList.remove('hidden');
+      togglePromptBtn.classList.add('has-value');
+      if (promptToggleText) {
+        promptToggleText.textContent = `Focus: "${val.length > 20 ? val.substring(0, 20) + '...' : val}"`;
+      }
+    } else {
+      clearPromptBtn.classList.add('hidden');
+      togglePromptBtn.classList.remove('has-value');
+      if (promptToggleText) {
+        promptToggleText.textContent = '+ Custom Focus (Optional)';
+      }
+    }
+  }
+
   if (customPromptInput) {
-    customPromptInput.addEventListener('input', toggleClearPromptBtn);
+    customPromptInput.addEventListener('input', updatePromptUIState);
   }
 
   if (clearPromptBtn) {
     clearPromptBtn.addEventListener('click', function () {
       if (customPromptInput) {
         customPromptInput.value = '';
-        toggleClearPromptBtn();
-        customPromptInput.focus();
+        updatePromptUIState();
+        collapsePromptInput();
       }
     });
-  }
-
-
-
-  function toggleClearPromptBtn() {
-    if (!clearPromptBtn || !customPromptInput) return;
-    if (customPromptInput.value.trim().length > 0) {
-      clearPromptBtn.classList.remove('hidden');
-    } else {
-      clearPromptBtn.classList.add('hidden');
-    }
   }
 
   function toggleClearButton() {
@@ -416,6 +453,11 @@ document.addEventListener('DOMContentLoaded', function () {
     transcriptPane.classList.toggle('hidden', tab !== 'transcript');
     transcriptPane.classList.toggle('active', tab === 'transcript');
 
+    // Context-Aware Custom Focus: Only show on Notes tab; completely hide on Chat & Transcript!
+    if (customPromptSection) {
+      customPromptSection.classList.toggle('hidden', tab !== 'notes');
+    }
+
     if (tab === 'chat') {
       chatInput.focus();
     }
@@ -449,7 +491,11 @@ document.addEventListener('DOMContentLoaded', function () {
       currentTranscriptLang = '';
       if (customPromptInput) {
         customPromptInput.value = '';
-        toggleClearPromptBtn();
+        updatePromptUIState();
+        collapsePromptInput();
+      }
+      if (customPromptSection) {
+        customPromptSection.classList.remove('hidden');
       }
       chatHistory = [];
       notesContent.innerHTML = '';
@@ -792,8 +838,15 @@ document.addEventListener('DOMContentLoaded', function () {
       currentNotes = saved.notes || saved.detailedNotes || saved.summaryNotes || '';
 
       if (customPromptInput) {
-        customPromptInput.value = saved.customPrompt || '';
-        toggleClearPromptBtn();
+        const savedPrompt = saved.customPrompt || '';
+        customPromptInput.value = savedPrompt;
+        if (savedPrompt) {
+          expandPromptInput(false);
+          updatePromptUIState();
+        } else {
+          collapsePromptInput();
+          updatePromptUIState();
+        }
       }
 
       displayNotes();

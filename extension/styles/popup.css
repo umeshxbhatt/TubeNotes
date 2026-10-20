@@ -288,17 +288,70 @@ body {
   filter: drop-shadow(0 0 4px rgba(255, 0, 51, 0.4));
 }
 
+/* ---------------- Collapsible Custom Focus Section ---------------- */
 .custom-prompt-section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+  transition: opacity 0.2s ease;
 }
 
-.prompt-header-row,
-.style-header-row {
+.custom-prompt-section.hidden {
+  display: none !important;
+}
+
+.prompt-toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.prompt-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 2px 2px;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  border-radius: var(--radius-sm);
+}
+
+.prompt-toggle-btn:hover {
+  color: #ffffff;
+}
+
+.prompt-toggle-btn .spark-sparkle-icon {
+  color: var(--crimson-primary);
+  transition: transform 0.25s ease;
+}
+
+.prompt-toggle-btn:hover .spark-sparkle-icon {
+  transform: rotate(15deg) scale(1.15);
+}
+
+.prompt-toggle-btn .chevron-icon {
+  color: var(--text-muted);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.prompt-toggle-btn.active .chevron-icon {
+  transform: rotate(180deg);
+  color: var(--crimson-primary);
+}
+
+.prompt-toggle-btn.has-value {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.prompt-toggle-btn.has-value .spark-sparkle-icon {
+  filter: drop-shadow(0 0 6px rgba(255, 0, 51, 0.6));
 }
 
 .clear-prompt-link {
@@ -307,7 +360,7 @@ body {
   color: var(--text-muted);
   font-size: 10px;
   cursor: pointer;
-  padding: 0;
+  padding: 0 4px;
   transition: var(--transition);
 }
 
@@ -320,6 +373,18 @@ body {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  overflow: hidden;
+  max-height: 80px;
+  opacity: 1;
+  transform-origin: top;
+  transition: max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, margin 0.2s ease;
+}
+
+.custom-prompt-container.collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin: 0;
+  pointer-events: none;
 }
 
 .custom-prompt-input-wrapper {

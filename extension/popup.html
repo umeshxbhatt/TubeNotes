@@ -48,13 +48,24 @@
           </button>
         </div>
 
-        <!-- Custom Prompt / Focus Input (Optional) -->
-        <div class="custom-prompt-section">
-          <div class="prompt-header-row">
-            <span class="section-label">CUSTOM FOCUS (OPTIONAL)</span>
+        <!-- Collapsible Custom Focus Accordion -->
+        <div id="customPromptSection" class="custom-prompt-section">
+          <!-- Toggle Pill/Button when collapsed -->
+          <div class="prompt-toggle-row">
+            <button type="button" id="togglePromptBtn" class="prompt-toggle-btn" title="Add custom focus instruction (e.g. Hinglish, code focus, exam summary)">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" class="spark-sparkle-icon">
+                <path d="M12 2l2.4 7.2L21.6 12l-7.2 2.8L12 22l-2.4-7.2L2.4 12l7.2-2.8L12 2z"/>
+              </svg>
+              <span id="promptToggleText">+ Custom Focus (Optional)</span>
+              <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" class="chevron-icon">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
             <button type="button" id="clearPromptBtn" class="clear-prompt-link hidden" title="Clear custom instruction">Clear</button>
           </div>
-          <div class="custom-prompt-container">
+
+          <!-- Collapsible Input Container -->
+          <div id="customPromptContainer" class="custom-prompt-container collapsed">
             <div class="custom-prompt-input-wrapper">
               <svg class="prompt-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 20h9"/>
